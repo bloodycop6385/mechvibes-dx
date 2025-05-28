@@ -26,6 +26,7 @@ impl PartialEq for AudioContext {
 
 impl AudioContext {
     pub fn new() -> Self {
+        println!("🎵 Creating new AudioContext...");
         let (stream, stream_handle) =
             rodio::OutputStream::try_default().expect("Failed to create audio output stream");
 
@@ -39,9 +40,10 @@ impl AudioContext {
             key_sinks: Arc::new(Mutex::new(HashMap::new())),
         };
 
-        // Khởi tạo volume từ config
+        // Initialize volume from config
         let config = AppConfig::load();
-        AUDIO_VOLUME.get_or_init(|| Mutex::new(config.volume)); // Load soundpack từ config với cache optimization
+        AUDIO_VOLUME.get_or_init(|| Mutex::new(config.volume));
+        // Load soundpack from config with cache optimization
         println!("🔍 Loading initial soundpack from cache...");
         match super::soundpack_loader::load_soundpack(&context) {
             Ok(_) => println!("✅ Initial soundpack loaded successfully from cache"),
@@ -50,21 +52,20 @@ impl AudioContext {
 
         context
     }
-
     pub fn set_volume(&self, volume: f32) {
-        // Cập nhật âm lượng cho các phím hiện tại
+        // Update volume for current keys
         let key_sinks = self.key_sinks.lock().unwrap();
         for sink in key_sinks.values() {
             sink.set_volume(volume);
         }
 
-        // Cập nhật biến global
+        // Update global variable
         if let Some(global) = AUDIO_VOLUME.get() {
             let mut g = global.lock().unwrap();
             *g = volume;
         }
 
-        // Lưu vào file cấu hình
+        // Save to config file
         let mut config = AppConfig::load();
         config.volume = volume;
         let _ = config.save();

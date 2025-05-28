@@ -1,32 +1,41 @@
-use crate::state::config::AppConfig;
-use crate::state::soundpack_cache::SoundpackCache;
-use dioxus::prelude::*;
-use std::sync::Arc;
+// Standard library imports
+use std::sync::{Arc, Mutex, RwLock};
 
-// Global app state để chia sẻ giữa các component
+// External crate imports
+use dioxus::prelude::*;
+use once_cell::sync::OnceCell;
+
+// Internal crate imports
+use crate::state::config::AppConfig;
+use crate::state::optimized_soundpack_cache::OptimizedSoundpackCache;
+use crate::state::soundpack_cache::SoundpackCache;
+
+// Global app state for sharing between components
 #[derive(Clone, Debug)]
 pub struct AppState {
     pub config: Arc<AppConfig>,
     pub soundpack_cache: Arc<SoundpackCache>,
+    pub optimized_cache: Arc<OptimizedSoundpackCache>,
 }
 
 impl AppState {
     pub fn new() -> Self {
         println!("🌍 Initializing global AppState...");
+
+        // Start background cache maintenance
+        crate::libs::audio::start_cache_maintenance();
+
         Self {
             config: Arc::new(AppConfig::load()),
             soundpack_cache: Arc::new(SoundpackCache::load()),
+            optimized_cache: Arc::new(OptimizedSoundpackCache::load()),
         }
     }
 }
 
-use once_cell::sync::OnceCell;
-use std::sync::Mutex;
-use std::sync::RwLock;
-
 static APP_STATE_SIGNAL: OnceCell<RwLock<AppState>> = OnceCell::new();
 
-// Hook để dễ dàng truy cập state từ component
+// Hook for easy access to state from components
 pub fn use_app_state() -> Signal<AppState> {
     // Initialize the global signal if needed
     if APP_STATE_SIGNAL.get().is_none() {
@@ -45,8 +54,24 @@ pub fn use_app_state() -> Signal<AppState> {
     })
 }
 
-// Hàm tiện ích để reload soundpacks từ bất kỳ đâu
-#[allow(dead_code)]
+// Reload the current soundpack from configuration
+pub fn reload_current_soundpack(audio_ctx: &crate::libs::audio::AudioContext) {
+    let config = crate::state::config::AppConfig::load();
+    let current_id = &config.current_soundpack;
+
+    match crate::libs::audio::load_soundpack_optimized(audio_ctx, current_id) {
+        Ok(_) => println!(
+            "✅ Current soundpack '{}' reloaded successfully (optimized)",
+            current_id
+        ),
+        Err(e) => eprintln!(
+            "❌ Failed to reload current soundpack '{}': {}",
+            current_id, e
+        ),
+    }
+}
+
+// Utility function to reload soundpacks from anywhere
 pub fn reload_soundpacks() {
     println!("🔄 Reloading global soundpack cache...");
 
@@ -55,9 +80,11 @@ pub fn reload_soundpacks() {
         if let Ok(mut app_state) = mutex.lock() {
             let config = app_state.config.clone();
             let soundpack_cache = Arc::new(SoundpackCache::rebuild());
+            let optimized_cache = Arc::new(OptimizedSoundpackCache::load());
             *app_state = AppState {
                 config,
                 soundpack_cache,
+                optimized_cache,
             };
         }
     }
@@ -67,52 +94,17 @@ pub fn reload_soundpacks() {
         if let Ok(mut signal_state) = rwlock.write() {
             let config = signal_state.config.clone();
             let soundpack_cache = Arc::new(SoundpackCache::rebuild());
+            let optimized_cache = Arc::new(OptimizedSoundpackCache::load());
             *signal_state = AppState {
                 config,
                 soundpack_cache,
+                optimized_cache,
             };
         }
     }
 }
 
 pub static APP_STATE: OnceCell<Mutex<AppState>> = OnceCell::new();
-
-pub fn save_config(config: AppConfig) -> Result<(), String> {
-    // Đảm bảo update version và timestamp khi lưu
-    let mut config = config;
-    config.version = env!("CARGO_PKG_VERSION").to_string();
-    config.last_updated = chrono::Utc::now();
-
-    // Lưu config
-    config.save().map_err(|e| e.to_string())?;
-
-    // Cập nhật config trong bộ nhớ một cách hiệu quả
-    let new_config = Arc::new(config);
-
-    // Update mutex state
-    if let Some(mutex) = APP_STATE.get() {
-        if let Ok(mut app_state) = mutex.lock() {
-            let soundpack_cache = app_state.soundpack_cache.clone();
-            *app_state = AppState {
-                config: new_config.clone(),
-                soundpack_cache,
-            };
-        }
-    }
-
-    // Update signal state
-    if let Some(rwlock) = APP_STATE_SIGNAL.get() {
-        if let Ok(mut signal_state) = rwlock.write() {
-            let soundpack_cache = signal_state.soundpack_cache.clone();
-            *signal_state = AppState {
-                config: new_config,
-                soundpack_cache,
-            };
-        }
-    }
-
-    Ok(())
-}
 
 // Call this function once at the start of your application to initialize APP_STATE
 pub fn init_app_state() {
