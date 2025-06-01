@@ -4,6 +4,7 @@ use crate::libs::AudioContext;
 use crate::state::keyboard::KeyboardState;
 use crate::Header;
 use dioxus::prelude::*;
+use notify_rust::Notification;
 use std::sync::{mpsc, Arc};
 
 pub fn app() -> Element {
@@ -28,21 +29,27 @@ pub fn app() -> Element {
             crate::state::app::reload_current_soundpacks(&ctx);
         });
     }
+
     // Create channels for real-time input event communication
     let (keyboard_tx, keyboard_rx) = mpsc::channel::<String>();
     let (mouse_tx, mouse_rx) = mpsc::channel::<String>();
+    let (hotkey_tx, hotkey_rx) = mpsc::channel::<String>();
     let keyboard_rx = Arc::new(keyboard_rx);
     let mouse_rx = Arc::new(mouse_rx);
+    let hotkey_rx = Arc::new(hotkey_rx);
+
     // Launch the unified input listener (handles both keyboard and mouse)
     {
         use_effect(move || {
             let keyboard_tx = keyboard_tx.clone();
             let mouse_tx = mouse_tx.clone();
+            let hotkey_tx = hotkey_tx.clone();
             spawn(async move {
-                start_unified_input_listener(keyboard_tx, mouse_tx);
+                start_unified_input_listener(keyboard_tx, mouse_tx, hotkey_tx);
             });
         });
     }
+
     // Process keyboard events and update both audio and UI state
     {
         let ctx = audio_context.clone();
@@ -96,6 +103,64 @@ pub fn app() -> Element {
                         }
                     }
                     futures_timer::Delay::new(std::time::Duration::from_millis(1)).await;
+                }
+            }
+        });
+    }
+
+    // Process hotkey Ctrl+Alt+M to toggle global sound
+    {
+        let hotkey_rx = hotkey_rx.clone();
+
+        use_future(move || {
+            let hotkey_rx = hotkey_rx.clone();
+
+            async move {
+                loop {
+                    if let Ok(hotkey_command) = hotkey_rx.try_recv() {
+                        if hotkey_command == "TOGGLE_SOUND" {
+                            // Load current config, toggle enable_sound, and save
+                            let mut config = crate::state::config::AppConfig::load();
+                            let old_state = config.enable_sound;
+                            config.enable_sound = !config.enable_sound;
+                            config.last_updated = chrono::Utc::now();
+                            match config.save() {
+                                Ok(_) => {
+                                    let status = if config.enable_sound {
+                                        "ENABLED"
+                                    } else {
+                                        "DISABLED"
+                                    };
+                                    println!(
+                                        "🔊 HOTKEY TRIGGERED: Global sound toggled from {} to {}",
+                                        if old_state { "ENABLED" } else { "DISABLED" },
+                                        status
+                                    );
+                                    // Show system notification if enabled
+                                    if config.show_notifications {
+                                        let message = if config.enable_sound {
+                                            "Global sound enabled"
+                                        } else {
+                                            "Global sound disabled"
+                                        };
+
+                                        if let Err(e) = Notification::new()
+                                            .summary("MechvibesDX")
+                                            .body(message)
+                                            .timeout(3000) // 3 seconds
+                                            .show()
+                                        {
+                                            eprintln!("❌ Failed to show notification: {}", e);
+                                        }
+                                    }
+                                }
+                                Err(e) => {
+                                    eprintln!("❌ Failed to save config after sound toggle: {}", e);
+                                }
+                            }
+                        }
+                    }
+                    futures_timer::Delay::new(std::time::Duration::from_millis(10)).await;
                 }
             }
         });
