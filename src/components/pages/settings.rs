@@ -1,7 +1,9 @@
+use crate::components::ui::PageHeader;
 use crate::libs::theme::{use_theme, Theme};
 use crate::state::app::use_app_state;
 use crate::state::config_utils::use_config;
 use dioxus::prelude::*;
+use lucide_dioxus::Settings;
 use std::sync::Arc;
 
 #[component]
@@ -67,9 +69,12 @@ pub fn SettingsPage() -> Element {
     rsx! {
       div { class: "p-12 pb-32",
         // Page header
-        div { class: "text-center mb-8",
-          h1 { class: "text-4xl font-bold mb-4 text-base-content", "Settings" }
-          p { class: "text-lg text-base-content", "Customize your MechvibesDX experience." }
+        PageHeader {
+          title: "Settings".to_string(),
+          subtitle: "Config your MechvibesDX experience.".to_string(),
+          icon: Some(rsx! {
+            Settings { class: "w-8 h-8 mx-auto" }
+          }),
         }
         // Settings sections
         div { class: "space-y-4",
@@ -84,26 +89,24 @@ pub fn SettingsPage() -> Element {
             div { class: "collapse-content text-sm",
               div { class: "form-control",
                 div { class: "space-y-6",
-                  // Theme Settings
-                  div { class: "form-control",
-                    div { class: "label",
-                      span { class: "label-text text-base", "Theme" }
-                    }
-                    div { class: "mt-2",
-                      crate::components::theme_toggler::ThemeToggler {}
-                    }
-                  }
+                  // Volume Control
                   label { class: "label cursor-pointer flex items-center justify-between",
                     div {
                       div { class: "label-text text-base", "Enable all sounds" }
                       div { class: "label-text-alt text-xs truncate",
-                        "Turn all keyboard sounds on or off"
+                        span { "You can also use " }
+                        span { class: "kbd kbd-xs font-mono text-base",
+                          "Ctrl+Alt+M"
+                        }
+                        span { " to toggle sound on/off" }
                       }
                     }
+
                     input {
                       r#type: "checkbox",
                       class: "toggle toggle-sm toggle-base-100",
-                      checked: enable_sound(),                      onchange: {
+                      checked: enable_sound(),
+                      onchange: {
                           let update_config = update_config.clone();
                           move |evt: Event<FormData>| {
                               update_config(
@@ -129,7 +132,8 @@ pub fn SettingsPage() -> Element {
                       input {
                         r#type: "checkbox",
                         class: "toggle toggle-sm toggle-base-100",
-                        checked: auto_start(),                        onchange: {
+                        checked: auto_start(),
+                        onchange: {
                             let update_config = update_config.clone();
                             move |evt: Event<FormData>| {
                                 update_config(
@@ -156,7 +160,8 @@ pub fn SettingsPage() -> Element {
                       input {
                         r#type: "checkbox",
                         class: "toggle toggle-sm toggle-base-100",
-                        checked: show_notifications(),                        onchange: {
+                        checked: show_notifications(),
+                        onchange: {
                             let update_config = update_config.clone();
                             move |evt: Event<FormData>| {
                                 update_config(
@@ -245,7 +250,8 @@ pub fn SettingsPage() -> Element {
               }
               div { class: " justify-start",
                 button {
-                  class: "btn btn-error btn-soft btn-sm",                  onclick: {
+                  class: "btn btn-error btn-soft btn-sm",
+                  onclick: {
                       let update_config = update_config.clone();
                       move |_| {
                           theme.set(Theme::System);
