@@ -2,16 +2,7 @@ use crate::libs::theme::Theme;
 use crate::state::paths;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use std::fs;
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CustomThemeData {
-    pub name: String,
-    pub css: String,
-    pub created_at: DateTime<Utc>,
-    pub modified_at: DateTime<Utc>,
-}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppConfig {
@@ -22,8 +13,7 @@ pub struct AppConfig {
 
     // Audio settings
     pub keyboard_soundpack: String,
-    pub mouse_soundpack: String,
-    pub volume: f32,
+    pub mouse_soundpack: String,    pub volume: f32,
     pub mouse_volume: f32, // Separate volume for mouse sounds
     pub enable_sound: bool,
     pub enable_keyboard_sound: bool, // Enable/disable keyboard sounds specifically
@@ -32,7 +22,6 @@ pub struct AppConfig {
     // UI settings
     pub theme: Theme,
     pub custom_css: String, // Legacy field for existing custom CSS
-    pub custom_themes: HashMap<String, CustomThemeData>, // New field for custom themes
 
     // System settings
     pub auto_start: bool,
@@ -65,8 +54,7 @@ impl AppConfig {
             }
         } else {
             let default_config = Self::default();
-            let _ = default_config.save();
-            default_config
+            let _ = default_config.save();            default_config
         }
     }
 
@@ -78,61 +66,11 @@ impl AppConfig {
             .map_err(|e| format!("Failed to write config file: {}", e))?;
         Ok(())
     }
-
-    /// Add or update a custom theme
-    pub fn save_custom_theme(&mut self, name: String, css: String) -> Result<(), String> {
-        if name.trim().is_empty() {
-            return Err("Theme name cannot be empty".to_string());
-        }
-
-        let now = Utc::now();
-        let theme_data = CustomThemeData {
-            name: name.clone(),
-            css,
-            created_at: self
-                .custom_themes
-                .get(&name)
-                .map(|existing| existing.created_at)
-                .unwrap_or(now),
-            modified_at: now,
-        };
-
-        self.custom_themes.insert(name, theme_data);
-        self.last_updated = now;
-        self.save()
-    }
-
-    /// Remove a custom theme
-    pub fn delete_custom_theme(&mut self, name: &str) -> Result<(), String> {
-        if !self.custom_themes.contains_key(name) {
-            return Err("Theme not found".to_string());
-        }
-
-        // If the current theme is the one being deleted, switch to System
-        if let Theme::Custom(current_name) = &self.theme {
-            if current_name == name {
-                self.theme = Theme::System;
-            }
-        }
-
-        self.custom_themes.remove(name);
-        self.last_updated = Utc::now();
-        self.save()
-    }
-
-    /// Get a custom theme by name
-    pub fn get_custom_theme(&self, name: &str) -> Option<&CustomThemeData> {
-        self.custom_themes.get(name)
-    }
-    /// List all custom theme names
-    pub fn list_custom_themes(&self) -> Vec<String> {
-        self.custom_themes.keys().cloned().collect()
-    }
 }
 
 impl Default for AppConfig {
     fn default() -> Self {
-        let config = Self {
+        Self {
             version: env!("CARGO_PKG_VERSION").to_string(),
             last_updated: Utc::now(),
             commit: option_env!("GIT_HASH").map(|s| s.to_string()),
@@ -145,11 +83,7 @@ impl Default for AppConfig {
             enable_mouse_sound: true,    // Default mouse sounds enabled
             theme: Theme::System,        // Default to System theme
             custom_css: String::new(),
-            custom_themes: HashMap::new(), // Empty custom themes by default
-            auto_start: false,
-            show_notifications: true,
-        };
-
-        config
+            auto_start: false,            show_notifications: true,
+        }
     }
 }
