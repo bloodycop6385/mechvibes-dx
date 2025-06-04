@@ -1,4 +1,4 @@
-use crate::state::config_utils::use_config;
+use crate::utils::config_utils::use_config;
 use dioxus::prelude::*;
 use lucide_dioxus::{Volume2, VolumeOff};
 
@@ -66,7 +66,7 @@ fn VolumeSliderBase(
             "data-tip": if enable_sound() { "Mute" } else { "Unmute" },
             button {
               class: format!(
-                  "btn btn-square btn-ghost rounded-lg {}",
+                  "btn btn-square btn-ghost {}",
                   if !enable_sound() { "btn-active" } else { "" },
               ),
               onclick: {

@@ -12,9 +12,10 @@ pub struct CustomThemeData {
     pub css: String,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+    pub is_built_in: bool, // Indicates if this is a built-in theme
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ThemesConfig {
     pub version: String,
     pub custom_themes: HashMap<String, CustomThemeData>,
@@ -118,6 +119,7 @@ impl ThemesConfig {
             css,
             created_at: now,
             updated_at: now,
+            is_built_in: false,
         };
 
         self.custom_themes.insert(id.clone(), theme_data);
@@ -170,7 +172,8 @@ impl ThemesConfig {
 
     pub fn list_themes(&self) -> Vec<&CustomThemeData> {
         let mut themes: Vec<&CustomThemeData> = self.custom_themes.values().collect();
-        themes.sort_by(|a, b| b.updated_at.cmp(&a.updated_at)); // Sort by most recently updated
+        themes.sort_by(|a, b| b.updated_at.cmp(&a.updated_at));
+        // Sort by most recently updated
         themes
     }
 }

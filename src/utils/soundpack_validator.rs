@@ -61,7 +61,9 @@ pub fn validate_soundpack_config(config_path: &str) -> SoundpackValidationResult
     let package_version = config
         .get("version")
         .and_then(|v| v.as_str())
-        .map(|s| s.to_string()); // Check for V1 indicators
+        .map(|s| s.to_string());
+
+    // Check for V1 indicators
     let has_defines = config.get("defines").is_some();
     let has_sound_field = config.get("sound").is_some();
     let _has_key_define_type = config.get("key_define_type").is_some();
@@ -205,33 +207,4 @@ fn validate_v2_structure(
             message: "Valid V2 soundpack configuration".to_string(),
         }
     }
-}
-
-/// Quick check if a config is V1 format by looking for V1-specific fields
-pub fn is_v1_config(config: &Value) -> bool {
-    let has_defines = config.get("defines").is_some();
-    let has_sound_field = config.get("sound").is_some();
-    let has_key_define_type = config.get("key_define_type").is_some();
-    let config_version = config
-        .get("config_version")
-        .and_then(|v| v.as_u64())
-        .map(|v| v as u32);
-
-    // Definitely V1 if explicitly marked or has V1 structure without V2 fields
-    config_version == Some(1)
-        || (has_defines && has_sound_field && !config.get("defs").is_some())
-        || has_key_define_type
-}
-
-/// Quick check if a config is V2 format
-pub fn is_v2_config(config: &Value) -> bool {
-    let config_version = config
-        .get("config_version")
-        .and_then(|v| v.as_u64())
-        .map(|v| v as u32);
-    let has_defs = config.get("defs").is_some();
-    let has_author = config.get("author").is_some();
-
-    // V2 if explicitly marked or has V2 structure
-    config_version == Some(2) || (has_defs && has_author)
 }

@@ -1,6 +1,6 @@
 use crate::components::ui::PageHeader;
-use crate::libs::theme::{use_theme, Theme};
-use crate::state::config_utils::use_config;
+use crate::libs::theme::{use_theme, BuiltInTheme, Theme};
+use crate::utils::config_utils::use_config;
 use dioxus::prelude::*;
 use lucide_dioxus::Settings;
 
@@ -121,13 +121,6 @@ pub fn SettingsPage() -> Element {
               }
             }
           }
-          // Soundpack Management Section
-          div { class: "collapse collapse-arrow border border-base-300 bg-base-200 text-base-content",
-            input { r#type: "radio", name: "setting-accordion" }
-            div { class: "collapse-title font-semibold", "Soundpack management" }
-            div { class: "collapse-content text-sm" }
-          }
-
           // App info Section
           div { class: "collapse collapse-arrow border border-base-300 bg-base-200 text-base-content",
             input { r#type: "radio", name: "setting-accordion" }
@@ -151,14 +144,14 @@ pub fn SettingsPage() -> Element {
                   onclick: {
                       let update_config = update_config.clone();
                       move |_| {
-                          theme.set(Theme::System);
+                          theme.set(Theme::BuiltIn(BuiltInTheme::System));
                           update_config(
                               Box::new(|config| {
                                   config.volume = 1.0;
                                   config.enable_sound = true;
                                   config.auto_start = false;
                                   config.show_notifications = true;
-                                  config.theme = Theme::System;
+                                  config.theme = Theme::BuiltIn(BuiltInTheme::System);
                               }),
                           );
                       }

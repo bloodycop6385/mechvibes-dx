@@ -5,6 +5,7 @@ mod components;
 mod libs;
 mod state;
 mod utils;
+
 pub use crate::components::header::Header;
 use dioxus::desktop::{Config, LogicalPosition, LogicalSize, WindowBuilder};
 use dioxus::prelude::*;
@@ -12,8 +13,12 @@ use libs::protocol;
 use libs::ui;
 
 fn main() {
-    env_logger::init(); // Initialize app manifest first
+    env_logger::init();
+
     println!("🚀 Initializing MechvibesDX...");
+
+    // Initialize app manifest first
+    let _manifest = state::manifest::AppManifest::load();
 
     // Check for command line arguments (protocol handling)
     let args: Vec<String> = std::env::args().collect();
@@ -43,8 +48,6 @@ fn main() {
     //     eprintln!("Warning: Failed to register mechvibes:// protocol: {}", e);
     // }
 
-    let _manifest = state::AppManifest::load();
-
     // Initialize global app state before rendering
     state::app::init_app_state();
 
@@ -70,7 +73,6 @@ fn main() {
 
 fn app_with_stylesheets() -> Element {
     rsx! {
-      // Use the UI root component directly - Header component is already included in ui::app
       ui::app {}
     }
 }
