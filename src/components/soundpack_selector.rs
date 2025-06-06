@@ -1,5 +1,5 @@
 use crate::libs::audio::AudioContext;
-use crate::utils::config_utils::use_config;
+use crate::utils::config::use_config;
 use dioxus::prelude::*;
 use futures_timer::Delay;
 use lucide_dioxus::{Check, ChevronDown, Keyboard, Mouse, Music, Search};
@@ -249,7 +249,7 @@ fn SoundpackDropdown(soundpack_type: SelectorType) -> Element {
                                   let soundpack_type_async = soundpack_type_click.clone();
                                   spawn(async move {
                                       is_loading_async.set(true);
-                                      Delay::new(Duration::from_millis(300)).await;
+                                      Delay::new(Duration::from_millis(1)).await;
                                       let result = match soundpack_type_async {
                                           SelectorType::Keyboard => {
                                               crate::libs::audio::load_keyboard_soundpack(

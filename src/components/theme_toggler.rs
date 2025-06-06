@@ -1,11 +1,11 @@
 use crate::libs::theme::{use_theme, BuiltInTheme, Theme};
 use crate::state::config::AppConfig;
 use crate::state::themes::ThemesConfig;
-use crate::utils::config_utils::use_config;
-use crate::utils::theme_utils::use_themes;
+use crate::utils::config::use_config;
+use crate::utils::theme::use_themes;
 use dioxus::document::eval;
 use dioxus::prelude::*;
-use lucide_dioxus::{Ellipsis, Pencil, Plus, Share2, Trash2};
+use lucide_dioxus::{Ellipsis, ExternalLink, Palette, Pencil, Plus, Trash2};
 
 #[component]
 pub fn ThemeToggler() -> Element {
@@ -135,7 +135,6 @@ pub fn ThemeToggler() -> Element {
           // Create new theme button
           CreateThemeButton { editing_theme_id: editing_theme }
         }
-      
       }
     }
 }
@@ -178,7 +177,7 @@ fn CustomThemeButton(props: CustomThemeButtonProps) -> Element {
         }
         // Dropdown for actions
         if !props.is_built_in {
-          div { class: "dropdown dropdown-left",
+          div { class: "dropdown dropdown-left dropdown-center",
             div {
               class: "btn btn-ghost",
               tabindex: "0",
@@ -194,12 +193,12 @@ fn CustomThemeButton(props: CustomThemeButtonProps) -> Element {
                   "Edit"
                 }
               }
-              li {
-                a { href: "",
-                  Share2 { class: "w-4 h-4 mr-1" }
-                  "Share"
-                }
-              }
+              // li {
+              //   a { href: "", class: "disabled",
+              //     Share2 { class: "w-4 h-4 mr-1" }
+              //     "Share"
+              //   }
+              // }
               li {
                 a {
                   class: "text-error",
@@ -223,7 +222,7 @@ struct CreateThemeButtonProps {
 #[component]
 fn CreateThemeButton(props: CreateThemeButtonProps) -> Element {
     rsx! {
-      div { class: "flex justify-center mt-4",
+      div { class: "flex justify-start gap-2 mt-4",
         button {
           class: "btn btn-neutral btn-sm",
           onclick: {
@@ -233,8 +232,24 @@ fn CreateThemeButton(props: CreateThemeButtonProps) -> Element {
                   eval("theme_creator_modal.showModal()");
               }
           },
-          Plus { class: "w-4 h-4 mr-1" }
-          "Create custom theme"
+          Palette { class: "w-4 h-4 mr-1" }
+          "Create"
+        }
+        // Disabled button for adding themes
+        // This is just a placeholder for future functionality
+        div { class: "tooltip", "data-tip": "Coming soon!",
+          button { class: "btn btn-ghost btn-sm", disabled: true,
+            Plus { class: "w-4 h-4 mr-1" }
+            "Add"
+          }
+        }
+        a {
+          class: "btn btn-ghost btn-sm",
+          href: "https://mechvibes.com/themes?utm_source=mechvibes&utm_medium=app&utm_campaign=theme_creator",
+          target: "_blank",
+          rel: "noopener noreferrer",
+          "Browse themes"
+          ExternalLink { class: "w-4 h-4 ml-1" }
         }
         ThemeCreatorModal { editing_theme_id: props.editing_theme_id }
       }
@@ -390,7 +405,15 @@ fn ThemeCreatorModal(props: ThemeCreatorModalProps) -> Element {
             if !error().is_empty() {
               div { class: "alert alert-error", {error()} }
             }
-            div { class: "flex justify-end gap-2",
+            div { class: "flex justify-between gap-2",
+              a {
+                class: "btn btn-ghost btn-sm",
+                href: "https://mechvibes.com/theme-editor?utm_source=mechvibes&utm_medium=app&utm_campaign=theme_creator",
+                target: "_blank",
+                rel: "noopener noreferrer",
+                "Advanced editor"
+                ExternalLink { class: "w-4 h-4 ml-1" }
+              }
               button {
                 class: "btn btn-primary btn-sm",
                 disabled: saving() || theme_name().trim().is_empty(),

@@ -1,8 +1,31 @@
 use crate::libs::theme::{BuiltInTheme, Theme};
 use crate::state::paths;
+use crate::utils::{data, path};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use std::fs;
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct LogoCustomization {
+    pub border_color: String,
+    pub text_color: String,
+    pub shadow_color: String,
+    pub background_color: String,
+    pub muted_background: String,
+    pub dimmed_when_muted: bool,
+}
+
+impl Default for LogoCustomization {
+    fn default() -> Self {
+        Self {
+            border_color: "var(--color-base-content)".to_string(),
+            text_color: "var(--color-base-content)".to_string(),
+            shadow_color: "var(--color-base-content)".to_string(),
+            background_color: "var(--color-base-200)".to_string(),
+            muted_background: "var(--color-base-300)".to_string(),
+            dimmed_when_muted: false,
+        }
+    }
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppConfig {
@@ -18,11 +41,11 @@ pub struct AppConfig {
     pub mouse_volume: f32, // Separate volume for mouse sounds
     pub enable_sound: bool,
     pub enable_keyboard_sound: bool, // Enable/disable keyboard sounds specifically
-    pub enable_mouse_sound: bool,    // Enable/disable mouse sounds specifically
-
-    // UI settings
+    pub enable_mouse_sound: bool,    // Enable/disable mouse sounds specifically    // UI settings
     pub theme: Theme,
     pub custom_css: String, // Legacy field for existing custom CSS
+    pub logo_customization: LogoCustomization,
+    pub enable_logo_customization: bool, // Enable/disable logo customization panel
 
     // System settings
     pub auto_start: bool,
@@ -31,42 +54,32 @@ pub struct AppConfig {
 
 impl AppConfig {
     pub fn load() -> Self {
+        let config_path = paths::data::config_json();
+        
         // Ensure data directory exists
-        let data_dir = paths::data::config_json().parent().unwrap().to_path_buf();
-        if let Err(_) = fs::create_dir_all(&data_dir) {
-            eprintln!("Warning: Could not create data directory");
+        if let Some(parent) = config_path.parent() {
+            if let Err(_) = path::ensure_directory_exists(&parent.to_string_lossy()) {
+                eprintln!("Warning: Could not create data directory");
+            }
         }
 
-        let config_path = paths::data::config_json();
-        if let Ok(contents) = fs::read_to_string(config_path) {
-            match serde_json::from_str::<AppConfig>(&contents) {
-                Ok(config) => {
-                    // Don't update version and last_updated when only reading config
-                    // Don't save file when only reading config
-                    config
-                }
-                Err(e) => {
-                    eprintln!(
-                        "Warning: Failed to parse config file: {}. Using defaults.",
-                        e
-                    );
-                    Self::default()
-                }
+        match data::load_json_from_file::<AppConfig>(&config_path) {
+            Ok(config) => {
+                // Don't update version and last_updated when only reading config
+                config
             }
-        } else {
-            let default_config = Self::default();
-            let _ = default_config.save();
-            default_config
+            Err(e) => {
+                eprintln!("Warning: Failed to load config file: {}. Using defaults.", e);
+                let default_config = Self::default();
+                let _ = default_config.save();
+                default_config
+            }
         }
     }
 
     pub fn save(&self) -> Result<(), String> {
         let config_path = paths::data::config_json();
-        let contents = serde_json::to_string_pretty(self)
-            .map_err(|e| format!("Failed to serialize config: {}", e))?;
-        fs::write(config_path, contents)
-            .map_err(|e| format!("Failed to write config file: {}", e))?;
-        Ok(())
+        data::save_json_to_file(self, &config_path)
     }
 }
 
@@ -85,6 +98,8 @@ impl Default for AppConfig {
             enable_mouse_sound: true,    // Default mouse sounds enabled
             theme: Theme::BuiltIn(BuiltInTheme::System), // Default to System theme
             custom_css: String::new(),
+            logo_customization: LogoCustomization::default(),
+            enable_logo_customization: false, // Default logo customization disabled
             auto_start: false,
             show_notifications: true,
         }

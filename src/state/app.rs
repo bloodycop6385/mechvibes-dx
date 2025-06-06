@@ -49,7 +49,8 @@ pub fn use_app_state() -> AppState {
     let update_signal: Signal<u32> = use_context();
 
     let app_state = use_memo(move || {
-        let _ = update_signal(); // Subscribe to changes
+        let _ = update_signal();
+        // Subscribe to changes
         if let Some(global_state) = GLOBAL_APP_STATE.get() {
             if let Ok(state) = global_state.lock() {
                 return state.clone();
@@ -80,17 +81,6 @@ pub fn use_state_trigger() -> Callback<()> {
         };
         update_signal.set(current_value + 1);
     })
-}
-
-// Global trigger function for use outside of components
-pub fn trigger_global_state_update(event: String) {
-    println!("🌍 Global state update triggered: {:?}", event);
-
-    if let Some(global_state) = GLOBAL_APP_STATE.get() {
-        if let Ok(mut state) = global_state.lock() {
-            state.refresh_cache();
-        }
-    }
 }
 
 // Reload the current soundpacks from configuration

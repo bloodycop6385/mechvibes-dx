@@ -2,9 +2,10 @@ use crate::components::logo::Logo;
 use crate::components::soundpack_selector::{KeyboardSoundpackSelector, MouseSoundpackSelector};
 use crate::components::volume_slider::{KeyboardVolumeSlider, MouseVolumeSlider};
 use crate::libs::AudioContext;
-use crate::utils::config_utils::use_config;
+use crate::utils::config::use_config;
 use dioxus::prelude::*;
 use futures_timer::Delay;
+use lucide_dioxus::Heart;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
@@ -119,12 +120,14 @@ pub fn HomePage(audio_ctx: Arc<AudioContext>) -> Element {
             }
           }
           div { class: "divider" }
-          div { class: "text-center",
+          div { class: "text-center space-y-2",
             // Version
             div { class: "text-sm text-base-content/70 font-bold", "MechvibesDX (Beta)" }
             // Footer with credits
             div { class: "text-sm text-base-content/50",
-              "Made with ❤️ by "
+              span { "Made with " }
+              Heart { class: "inline w-3.5 h-3.5 -mt-1 text-error/70 fill-error/30" }
+              span { " by " }
               a {
                 href: "https://github.com/hainguyents13/mechvibes-dx",
                 target: "_blank",

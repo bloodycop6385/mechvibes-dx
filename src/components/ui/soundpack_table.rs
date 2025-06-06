@@ -1,6 +1,33 @@
+use crate::state::paths;
 use crate::state::soundpack::SoundpackMetadata;
+use crate::state::{app::use_state_trigger, paths::utils::open_path};
+use crate::utils::path;
+use dioxus::document::eval;
 use dioxus::prelude::*;
 use lucide_dioxus::{FolderOpen, Music, Plus, Trash};
+
+use super::ConfirmDeleteModal;
+
+/// Open a soundpack folder in the system file manager
+fn open_soundpack_folder(soundpack_id: &str) -> Result<(), String> {
+    let soundpack_path = paths::soundpacks::soundpack_dir(soundpack_id);
+    open_path(&soundpack_path).map_err(|e| format!("Failed to open soundpack folder: {}", e))
+}
+
+/// Delete a soundpack directory and all its contents
+fn delete_soundpack(soundpack_id: &str) -> Result<(), String> {
+    let soundpack_path = paths::soundpacks::soundpack_dir(soundpack_id); // Check if the directory exists
+    if !path::directory_exists(&soundpack_path) {
+        return Err(format!("Soundpack directory not found: {}", soundpack_path));
+    }
+
+    // Remove the entire directory
+    std::fs::remove_dir_all(&soundpack_path)
+        .map_err(|e| format!("Failed to delete soundpack directory: {}", e))?;
+
+    println!("🗑️ Successfully deleted soundpack: {}", soundpack_id);
+    Ok(())
+}
 
 #[component]
 pub fn SoundpackTable(
@@ -11,33 +38,28 @@ pub fn SoundpackTable(
     // Search state
     let mut search_query = use_signal(String::new);
 
-    // Clone soundpacks for use in memo
-    let soundpacks_clone = soundpacks.clone();
-
-    // Filter soundpacks based on search query
-    let filtered_soundpacks = use_memo(move || {
-        let query = search_query().to_lowercase();
-        if query.is_empty() {
-            soundpacks_clone.clone()
-        } else {
-            soundpacks_clone
-                .iter()
-                .filter(|pack| {
-                    pack.name.to_lowercase().contains(&query)
-                        || pack.id.to_lowercase().contains(&query)
-                        || pack
-                            .author
-                            .as_ref()
-                            .map_or(false, |author| author.to_lowercase().contains(&query))
-                        || pack
-                            .tags
-                            .iter()
-                            .any(|tag| tag.to_lowercase().contains(&query))
-                })
-                .cloned()
-                .collect()
-        }
-    });
+    // Filter soundpacks based on search query - computed every render to be reactive to props changes
+    let query = search_query().to_lowercase();
+    let filtered_soundpacks: Vec<SoundpackMetadata> = if query.is_empty() {
+        soundpacks.clone()
+    } else {
+        soundpacks
+            .iter()
+            .filter(|pack| {
+                pack.name.to_lowercase().contains(&query)
+                    || pack.id.to_lowercase().contains(&query)
+                    || pack
+                        .author
+                        .as_ref()
+                        .map_or(false, |author| author.to_lowercase().contains(&query))
+                    || pack
+                        .tags
+                        .iter()
+                        .any(|tag| tag.to_lowercase().contains(&query))
+            })
+            .cloned()
+            .collect()
+    };
 
     if soundpacks.is_empty() {
         rsx! {
@@ -64,18 +86,16 @@ pub fn SoundpackTable(
                   "Add"
                 }
               }
-            }
-
-            // Table
+            } // Table
             div { class: "overflow-x-auto max-h-[calc(100vh-500px)]",
-              if filtered_soundpacks().is_empty() {
+              if filtered_soundpacks.is_empty() {
                 div { class: "p-4 text-center text-base-content/70",
                   "No result match your search!"
                 }
               } else {
                 table { class: "table table-sm w-full",
                   tbody {
-                    for pack in filtered_soundpacks() {
+                    for pack in filtered_soundpacks {
                       SoundpackTableRow { soundpack: pack }
                     }
                   }
@@ -89,6 +109,51 @@ pub fn SoundpackTable(
 
 #[component]
 pub fn SoundpackTableRow(soundpack: SoundpackMetadata) -> Element {
+    let state_trigger = use_state_trigger();
+
+    // Handlers for button clicks
+    let on_open_folder = {
+        let soundpack_id = soundpack.id.clone();
+        move |_| {
+            let soundpack_id = soundpack_id.clone();
+            spawn(async move {
+                match open_soundpack_folder(&soundpack_id) {
+                    Ok(_) => println!(
+                        "✅ Successfully opened folder for soundpack: {}",
+                        soundpack_id
+                    ),
+                    Err(e) => eprintln!(
+                        "❌ Failed to open folder for soundpack {}: {}",
+                        soundpack_id, e
+                    ),
+                }
+            });
+        }
+    };
+
+    // Handler for delete button click
+    let on_confirm_delete = {
+        let soundpack_id = soundpack.id.clone();
+        let trigger = state_trigger.clone();
+        move |_| {
+            let soundpack_id = soundpack_id.clone();
+            let trigger = trigger.clone();
+            spawn(async move {
+                match delete_soundpack(&soundpack_id) {
+                    Ok(_) => {
+                        println!("✅ Successfully deleted soundpack: {}", soundpack_id);
+                        // The modal will close automatically due to form method="dialog"
+                        // Trigger state refresh to update the UI
+                        trigger.call(());
+                    }
+                    Err(e) => {
+                        eprintln!("❌ Failed to delete soundpack {}: {}", soundpack_id, e);
+                        // Could show an error modal here if needed
+                    }
+                }
+            });
+        }
+    };
     rsx! {
       tr { class: "hover:bg-base-100",
         td { class: "flex items-center gap-4",
@@ -104,12 +169,12 @@ pub fn SoundpackTableRow(soundpack: SoundpackMetadata) -> Element {
                   }
                 }
               } else {
-                div { class: "w-8 h-8 rounded bg-base-300 flex items-center justify-center",
+                div { class: "w-8 h-8 rounded-box bg-base-300 flex items-center justify-center",
                   Music { class: "w-4 h-4 text-base-content/40" }
                 }
               }
             } else {
-              div { class: "w-8 h-8 rounded bg-base-300 flex items-center justify-center",
+              div { class: "w-8 h-8 rounded-box bg-base-300 flex items-center justify-center",
                 Music { class: "w-4 h-4 text-base-content/40" }
               }
             }
@@ -130,15 +195,30 @@ pub fn SoundpackTableRow(soundpack: SoundpackMetadata) -> Element {
             button {
               class: "btn btn-soft btn-xs",
               title: "Open soundpack folder",
+              onclick: on_open_folder,
               FolderOpen { class: "w-4 h-4" }
             }
             button {
               class: "btn btn-soft btn-error btn-xs",
               title: "Delete this soundpack",
+              onclick: move |_| {
+                  eval(
+                      &format!(
+                          "document.getElementById(\"confirm_delete_modal_{}\").showModal()",
+                          soundpack.id,
+                      ),
+                  );
+              },
               Trash { class: "w-4 h-4" }
             }
           }
         }
+      }
+      // Delete confirmation modal
+      ConfirmDeleteModal {
+        modal_id: format!("confirm_delete_modal_{}", soundpack.id),
+        soundpack_name: soundpack.name.clone(),
+        on_confirm: on_confirm_delete,
       }
     }
 }

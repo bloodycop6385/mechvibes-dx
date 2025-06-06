@@ -1,5 +1,6 @@
+use crate::utils::path;
 use serde_json::Value;
-use std::fs::{create_dir_all, File};
+use std::fs::File;
 use std::io::Read;
 use std::path::Path;
 use uuid::Uuid;
@@ -48,7 +49,7 @@ pub fn get_soundpack_id_from_zip(file_path: &str) -> Result<String, String> {
             }
 
             // If no ID in config, generate a UUID-based ID
-            return Ok(format!("imported_{}", Uuid::new_v4()));
+            return Ok(format!("imported-{}", Uuid::new_v4()));
         }
     }
 
@@ -106,21 +107,17 @@ pub fn extract_and_install_soundpack(file_path: &str) -> Result<SoundpackInfo, S
 
     // If no ID in config, generate a UUID-based ID
     if soundpack_id.is_empty() {
-        soundpack_id = format!("imported_{}", Uuid::new_v4());
+        soundpack_id = format!("imported-{}", Uuid::new_v4());
 
         // Add the generated ID to the config
         config["id"] = Value::String(soundpack_id.clone());
     }
 
     // Handle V1 to V2 conversion if needed
-    let final_config_content = handle_config_conversion(&config.to_string(), &soundpack_id)?;
-
-    // Determine installation directory using soundpack ID
+    let final_config_content = handle_config_conversion(&config.to_string(), &soundpack_id)?; // Determine installation directory using soundpack ID
     let soundpacks_dir = crate::state::paths::utils::get_soundpacks_dir_absolute();
-    let install_dir = Path::new(&soundpacks_dir).join(&soundpack_id);
-
-    // Create installation directory
-    create_dir_all(&install_dir)
+    let install_dir = Path::new(&soundpacks_dir).join(&soundpack_id); // Create installation directory
+    path::ensure_directory_exists(&install_dir.to_string_lossy())
         .map_err(|e| format!("Failed to create soundpack directory: {}", e))?;
 
     // Second pass: extract all files
@@ -150,11 +147,10 @@ pub fn extract_and_install_soundpack(file_path: &str) -> Result<SoundpackInfo, S
             }
         } else {
             install_dir.join(&file_path)
-        };
-
-        // Create parent directories if needed
+        }; // Create parent directories if needed
         if let Some(parent) = output_path.parent() {
-            create_dir_all(parent).map_err(|e| format!("Failed to create directory: {}", e))?;
+            path::ensure_directory_exists(&parent.to_string_lossy())
+                .map_err(|e| format!("Failed to create directory: {}", e))?;
         }
 
         // Extract file
@@ -163,10 +159,9 @@ pub fn extract_and_install_soundpack(file_path: &str) -> Result<SoundpackInfo, S
         std::io::copy(&mut file, &mut output_file)
             .map_err(|e| format!("Failed to extract file: {}", e))?;
     }
-
     // Write the final config.json at the root level of the soundpack directory
     let config_path = install_dir.join("config.json");
-    std::fs::write(&config_path, &final_config_content)
+    path::write_file_contents(&config_path.to_string_lossy(), &final_config_content)
         .map_err(|e| format!("Failed to write config.json: {}", e))?;
 
     Ok(SoundpackInfo {

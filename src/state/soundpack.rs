@@ -1,8 +1,7 @@
 use crate::state::paths;
-use crate::utils::soundpack_utils;
+use crate::utils::{data, path, soundpack};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::fs;
 use std::path::Path;
 
 // ===== SOUNDPACK TYPES =====
@@ -88,26 +87,21 @@ impl SoundpackCache {
             .to_string_lossy()
             .to_string()
     }
-
     pub fn load() -> Self {
         let cache_file = Self::cache_file();
-        // Load metadata cache
-        let mut cache = match fs::read_to_string(&cache_file) {
-            Ok(content) => match serde_json::from_str::<SoundpackCache>(&content) {
-                Ok(cache) => {
-                    println!(
-                        "📦 Loaded soundpack metadata cache with {} entries",
-                        cache.soundpacks.len()
-                    );
-                    cache
-                }
-                Err(e) => {
-                    eprintln!("⚠️  Failed to parse cache file: {}", e);
-                    Self::new()
-                }
-            },
-            Err(_) => {
-                println!("📦 Creating new soundpack metadata cache");
+        // Load metadata cache using data utilities
+        let mut cache = match data::load_json_from_file::<SoundpackCache>(
+            std::path::Path::new(&cache_file),
+        ) {
+            Ok(cache) => {
+                println!(
+                    "📦 Loaded soundpack metadata cache with {} entries",
+                    cache.soundpacks.len()
+                );
+                cache
+            }
+            Err(e) => {
+                eprintln!("⚠️  Failed to load cache file: {}", e);
                 Self::new()
             }
         };
@@ -135,12 +129,12 @@ impl SoundpackCache {
             cache_version: 3, // Current version with validation support
         }
     }
-
     pub fn save(&self) {
         let cache_file = Self::cache_file();
+
         // Ensure parent directory exists
         if let Some(parent) = Path::new(&cache_file).parent() {
-            if let Err(e) = fs::create_dir_all(parent) {
+            if let Err(e) = path::ensure_directory_exists(&parent.to_string_lossy()) {
                 eprintln!("⚠️  Failed to create cache directory: {}", e);
                 return;
             }
@@ -165,18 +159,12 @@ impl SoundpackCache {
             );
         }
 
-        match serde_json::to_string_pretty(self) {
-            Ok(content) => {
-                if let Err(e) = fs::write(&cache_file, content) {
-                    eprintln!("⚠️  Failed to save metadata cache: {}", e);
-                } else {
-                    println!(
-                        "💾 Saved soundpack metadata cache with {} entries",
-                        self.soundpacks.len()
-                    );
-                }
-            }
-            Err(e) => eprintln!("⚠️  Failed to serialize cache: {}", e),
+        match data::save_json_to_file(self, std::path::Path::new(&cache_file)) {
+            Ok(_) => println!(
+                "💾 Saved soundpack metadata cache with {} entries",
+                self.soundpacks.len()
+            ),
+            Err(e) => eprintln!("⚠️  Failed to save metadata cache: {}", e),
         }
     }
 
@@ -197,7 +185,7 @@ impl SoundpackCache {
                 for entry in entries.filter_map(|e| e.ok()) {
                     if let Some(soundpack_id) = entry.file_name().to_str() {
                         println!("🔄 Regenerating metadata for: {}", soundpack_id);
-                        if let Ok(metadata) = soundpack_utils::load_soundpack_metadata(soundpack_id)
+                        if let Ok(metadata) = soundpack::load_soundpack_metadata(soundpack_id)
                         {
                             self.soundpacks.insert(soundpack_id.to_string(), metadata);
                         }

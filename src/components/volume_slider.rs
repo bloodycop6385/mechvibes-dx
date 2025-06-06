@@ -1,4 +1,4 @@
-use crate::utils::config_utils::use_config;
+use crate::utils::config::use_config;
 use dioxus::prelude::*;
 use lucide_dioxus::{Volume2, VolumeOff};
 
@@ -76,25 +76,21 @@ fn VolumeSliderBase(
                       match volume_type {
                           VolumeType::Keyboard => {
                               let config = config();
-                              if config.enable_sound {
-                                  let new_enable_keyboard = !config.enable_keyboard_sound;
-                                  update_config(
-                                      Box::new(move |config| {
-                                          config.enable_keyboard_sound = new_enable_keyboard;
-                                      }),
-                                  );
-                              }
+                              let new_enable_keyboard = !config.enable_keyboard_sound;
+                              update_config(
+                                  Box::new(move |config| {
+                                      config.enable_keyboard_sound = new_enable_keyboard;
+                                  }),
+                              );
                           }
                           VolumeType::Mouse => {
                               let config = config();
-                              if config.enable_sound {
-                                  let new_enable_mouse = !config.enable_mouse_sound;
-                                  update_config(
-                                      Box::new(move |config| {
-                                          config.enable_mouse_sound = new_enable_mouse;
-                                      }),
-                                  );
-                              }
+                              let new_enable_mouse = !config.enable_mouse_sound;
+                              update_config(
+                                  Box::new(move |config| {
+                                      config.enable_mouse_sound = new_enable_mouse;
+                                  }),
+                              );
                           }
                       }
                   }

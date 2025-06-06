@@ -1,4 +1,5 @@
 use crate::state::paths;
+use crate::utils::platform;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::fs;
@@ -54,15 +55,11 @@ impl AppManifest {
                 build_date: Utc::now(),
                 git_commit: option_env!("GIT_HASH").map(|s| s.to_string()),
                 git_branch: "main".to_string(),
-                build_type: if cfg!(debug_assertions) {
-                    "debug".to_string()
-                } else {
-                    "release".to_string()
-                },
+                build_type: platform::get_build_type(),
             },
             compatibility: CompatibilityInfo {
-                min_os_version: "Windows 10".to_string(),
-                supported_architectures: vec!["x86_64".to_string()],
+                min_os_version: platform::get_min_os_version(),
+                supported_architectures: platform::get_supported_architectures(),
             },
             paths: AppPaths {
                 config: paths::data::config_json().to_string_lossy().to_string(),
@@ -76,7 +73,7 @@ impl AppManifest {
             metadata: Metadata {
                 created_at: Utc::now(),
                 last_updated: Utc::now(),
-                platform: Self::get_platform(),
+                platform: platform::get_platform(),
             },
         }
     }
@@ -116,18 +113,6 @@ impl AppManifest {
                 eprintln!("❌ Failed to create manifest.json: {}", e);
             }
             new_manifest
-        }
-    }
-
-    fn get_platform() -> String {
-        if cfg!(target_os = "windows") {
-            "windows".to_string()
-        } else if cfg!(target_os = "macos") {
-            "macos".to_string()
-        } else if cfg!(target_os = "linux") {
-            "linux".to_string()
-        } else {
-            "unknown".to_string()
         }
     }
 

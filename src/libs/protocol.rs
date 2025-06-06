@@ -251,7 +251,7 @@ fn import_theme_from_protocol(theme_data: &str) -> Result<(), Box<dyn std::error
     use crate::libs::theme::Theme;
     use crate::state::config::AppConfig;
     use crate::state::themes::CustomThemeData;
-    use crate::utils::theme_utils::get_themes_config;
+    use crate::utils::theme::get_themes_config;
     use chrono::Utc;
     use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -265,7 +265,7 @@ fn import_theme_from_protocol(theme_data: &str) -> Result<(), Box<dyn std::error
         .unwrap()
         .as_secs();
 
-    let theme_id = format!("imported_{}", timestamp);
+    let theme_id = format!("imported-{}", timestamp);
     let theme_name = if theme_data.is_empty() {
         "Imported Theme"
     } else {
