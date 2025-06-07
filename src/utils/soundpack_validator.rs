@@ -70,7 +70,8 @@ pub fn validate_soundpack_config(config_path: &str) -> SoundpackValidationResult
     // Check for V1 indicators
     let has_defines = config.get("defines").is_some();
     let has_sound_field = config.get("sound").is_some();
-    let _has_key_define_type = config.get("key_define_type").is_some();
+    let has_method_field =
+        config.get("method").is_some() || config.get("key_define_type").is_some();
 
     // Check for V2 indicators
     let has_defs = config.get("defs").is_some();
@@ -82,14 +83,19 @@ pub fn validate_soundpack_config(config_path: &str) -> SoundpackValidationResult
         // Explicitly marked as V2, validate V2 structure
         validate_v2_structure(&config, config_version, package_version)
     } else if config_version == Some(1) || (has_defines && has_sound_field && !has_defs) {
-        // Explicitly V1 or has V1 structure
+        // Explicitly V1 or has V1 structure (defines + sound + no defs)
         SoundpackValidationResult {
             status: SoundpackValidationStatus::VersionOneNeedsConversion,
             config_version: Some(1),
             detected_version: package_version,
             is_valid_v2: false,
             can_be_converted: true,
-            message: "Version 1 soundpack detected, needs conversion to V2 format".to_string(),
+            message: if has_method_field {
+                "Version 1 soundpack with method field detected, needs conversion to V2 format"
+                    .to_string()
+            } else {
+                "Version 1 soundpack detected, needs conversion to V2 format".to_string()
+            },
         }
     } else if has_defs && has_author {
         // Looks like V2 but no explicit version
@@ -98,10 +104,6 @@ pub fn validate_soundpack_config(config_path: &str) -> SoundpackValidationResult
         // Unknown or invalid structure
         let mut missing_fields = Vec::new();
 
-        if !has_author {
-            missing_fields.push("author".to_string());
-        }
-
         if !has_defs && !has_defines {
             missing_fields.push("defs or defines".to_string());
         }
@@ -109,7 +111,6 @@ pub fn validate_soundpack_config(config_path: &str) -> SoundpackValidationResult
         if !config.get("name").is_some() {
             missing_fields.push("name".to_string());
         }
-
         SoundpackValidationResult {
             status: SoundpackValidationStatus::MissingRequiredFields(missing_fields.clone()),
             config_version: config_version,
@@ -246,6 +247,7 @@ pub async fn validate_soundpack_structure(file_path: &str) -> Result<(String, St
 
     let mut config_found = false;
     let mut audio_found = false;
+    let mut config_method = "single".to_string();
     let mut config_content = String::new();
     let mut soundpack_name = "Unknown".to_string();
 
@@ -268,6 +270,9 @@ pub async fn validate_soundpack_structure(file_path: &str) -> Result<(String, St
                 if let Some(name) = config.get("name").and_then(|v| v.as_str()) {
                     soundpack_name = name.to_string();
                 }
+                if let Some(method) = config.get("method").and_then(|v| v.as_str()) {
+                    config_method = method.to_string();
+                }
             }
         }
 
@@ -286,7 +291,8 @@ pub async fn validate_soundpack_structure(file_path: &str) -> Result<(String, St
         return Err("No config.json found in soundpack".to_string());
     }
 
-    if !audio_found {
+    // If single method, ensure at least one audio file is present
+    if config_method == "single" && !audio_found {
         return Err("No audio files found in soundpack".to_string());
     }
 

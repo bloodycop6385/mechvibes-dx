@@ -37,7 +37,9 @@ pub fn Soundpacks() -> Element {
         "🔄 Filtered: {} keyboard, {} mouse soundpacks",
         keyboard_soundpacks.len(),
         mouse_soundpacks.len()
-    );    // Get access to audio context for reloading soundpacks
+    );
+
+    // Get access to audio context for reloading soundpacks
     let audio_ctx: Arc<crate::libs::audio::AudioContext> = use_context();
 
     rsx! {
@@ -106,11 +108,13 @@ pub fn Soundpacks() -> Element {
               }),
             }
           }
-        } // Import modal
+        }
+
+        // Import modal
         SoundpackImportModal {
           modal_id: "soundpack_import_modal".to_string(),
           audio_ctx,
-          on_import_success: EventHandler::new(move |_soundpack_id: String| {
+          on_import_success: EventHandler::new(move |_| {
               trigger_update(());
           }),
         }

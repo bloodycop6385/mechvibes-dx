@@ -1,30 +1,33 @@
-use crate::components::ui::{Collapse, PageHeader, Toggler};
-use crate::libs::theme::{use_theme, BuiltInTheme, Theme};
+use crate::components::ui::{ Collapse, PageHeader, Toggler };
+use crate::libs::theme::{ use_theme, BuiltInTheme, Theme };
+use crate::libs::tray_service::request_tray_update;
 use crate::utils::config::use_config;
+use crate::utils::constants::{ APP_NAME_DISPLAY, APP_NAME };
 use dioxus::prelude::*;
 use lucide_dioxus::Settings;
 
 #[component]
 pub fn SettingsPage() -> Element {
     // Use shared config hook
-    let (config, update_config) = use_config();
-    // Use computed signals that always reflect current config state
+    let (config, update_config) = use_config(); // Use computed signals that always reflect current config state
     let enable_sound = use_memo(move || config().enable_sound);
     let auto_start = use_memo(move || config().auto_start);
     let show_notifications = use_memo(move || config().show_notifications);
+    let show_debug_console = use_memo(move || config().show_debug_console);
 
     // Theme state - use theme context (initialized in Layout component)
     let mut theme = use_theme();
     rsx! {
-      div { class: "p-12 pb-32",
-        // Page header
+      div { class: "p-12 pb-32",        // Page header
         PageHeader {
           title: "Settings".to_string(),
-          subtitle: "Config your MechvibesDX experience.".to_string(),
+          subtitle: format!("Config your {} experience.", APP_NAME_DISPLAY),
           icon: Some(rsx! {
             Settings { class: "w-8 h-8 mx-auto" }
           }),
-        } // Settings sections
+        }
+
+        // Settings sections
         div { class: "space-y-4",
           // General Settings Section
           Collapse {
@@ -33,8 +36,7 @@ pub fn SettingsPage() -> Element {
             default_open: true,
             content_class: "collapse-content text-sm",
             children: rsx! {
-              div { class: "space-y-6",
-                // Volume Control
+              div { class: "space-y-6", // Volume Control
                 Toggler {
                   title: "Enable all sounds".to_string(),
                   description: Some("You can also use Ctrl+Alt+M to toggle sound on/off".to_string()),
@@ -47,13 +49,14 @@ pub fn SettingsPage() -> Element {
                                   config.enable_sound = new_value;
                               }),
                           );
+                          request_tray_update();
                       }
                   },
                 }
-                // Auto Start
+                  // Auto Start
                 Toggler {
                   title: "Start with Windows".to_string(),
-                  description: Some("Automatically start MechvibesDX when Windows boots".to_string()),
+                  description: Some(format!("Automatically start {} when Windows boots", APP_NAME)),
                   checked: auto_start(),
                   on_change: {
                       let update_config = update_config.clone();
@@ -63,10 +66,20 @@ pub fn SettingsPage() -> Element {
                                   config.auto_start = new_value;
                               }),
                           );
+                          spawn(async move {
+                              match crate::utils::auto_startup::set_auto_startup(new_value) {
+                                  Ok(_) => {
+                                      let status = if new_value { "enabled" } else { "disabled" };
+                                      println!("✅ Auto startup {}", status);
+                                  }
+                                  Err(e) => {
+                                      eprintln!("❌ Failed to set auto startup: {}", e);
+                                  }
+                              }
+                          });
                       }
                   },
-                }
-                // Notifications
+                }                // Notifications
                 Toggler {
                   title: "Show Notifications".to_string(),
                   description: Some("Display system notifications for important events".to_string()),
@@ -77,6 +90,22 @@ pub fn SettingsPage() -> Element {
                           update_config(
                               Box::new(move |config| {
                                   config.show_notifications = new_value;
+                              }),
+                          );
+                      }
+                  },
+                }
+                // Debug Console
+                Toggler {
+                  title: "Show Debug Console".to_string(),
+                  description: Some("Show terminal window for debugging (requires restart)".to_string()),
+                  checked: show_debug_console(),
+                  on_change: {
+                      let update_config = update_config.clone();
+                      move |new_value: bool| {
+                          update_config(
+                              Box::new(move |config| {
+                                  config.show_debug_console = new_value;
                               }),
                           );
                       }

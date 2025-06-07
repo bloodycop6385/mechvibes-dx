@@ -41,7 +41,9 @@ pub fn get_soundpack_id_from_zip(file_path: &str) -> Result<String, String> {
 
             // Extract ID from config content only
             let config: Value = serde_json::from_str(&config_content)
-                .map_err(|e| format!("Failed to parse config.json: {}", e))?; // Check if the config already contains an ID field
+                .map_err(|e| format!("Failed to parse config.json: {}", e))?;
+
+            // Check if the config already contains an ID field
             if let Some(id) = config.get("id").and_then(|v| v.as_str()) {
                 if !id.trim().is_empty() {
                     return Ok(id.to_string());
@@ -116,7 +118,9 @@ pub fn extract_and_install_soundpack(file_path: &str) -> Result<SoundpackInfo, S
     // Handle V1 to V2 conversion if needed
     let final_config_content = handle_config_conversion(&config.to_string(), &soundpack_id)?; // Determine installation directory using soundpack ID
     let soundpacks_dir = crate::state::paths::utils::get_soundpacks_dir_absolute();
-    let install_dir = Path::new(&soundpacks_dir).join(&soundpack_id); // Create installation directory
+    let install_dir = Path::new(&soundpacks_dir).join(&soundpack_id);
+
+    // Create installation directory
     path::ensure_directory_exists(&install_dir.to_string_lossy())
         .map_err(|e| format!("Failed to create soundpack directory: {}", e))?;
 

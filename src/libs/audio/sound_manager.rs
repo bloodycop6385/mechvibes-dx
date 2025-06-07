@@ -16,7 +16,6 @@ impl AudioContext {
         // Check enable_sound from config before playing audio
         let config = AppConfig::load();
         if !config.enable_sound || !config.enable_keyboard_sound {
-            println!("🔇 Keyboard sound disabled in config, skipping key event");
             return;
         }
 
@@ -33,6 +32,7 @@ impl AudioContext {
             pressed.insert(key.to_string(), false);
         }
         drop(pressed);
+
         // Get timestamp and duration
         let key_map = self.key_map.lock().unwrap();
         let (start, duration) = match key_map.get(key) {
@@ -41,9 +41,17 @@ impl AudioContext {
                 let arr = arr[idx];
                 (arr[0] / 1000.0, arr[1] / 1000.0)
             }
+            Some(arr) if arr.len() == 1 => {
+                // Only keydown mapping available, ignore keyup events
+                if !is_keydown {
+                    return; // Skip keyup events for keys with only keydown mapping
+                }
+                let arr = arr[0];
+                (arr[0] / 1000.0, arr[1] / 1000.0)
+            }
             Some(arr) => {
                 eprintln!(
-                    "Invalid mapping for key '{}': expected 2 elements, got {}",
+                    "Invalid mapping for key '{}': expected 1-2 elements, got {}",
                     key,
                     arr.len()
                 );
@@ -58,12 +66,15 @@ impl AudioContext {
 
         self.play_sound_segment(key, start, duration, is_keydown);
     }
+
     fn play_sound_segment(&self, key: &str, start: f32, duration: f32, is_keydown: bool) {
         let pcm_opt = self.keyboard_samples.lock().unwrap().clone();
 
         if let Some((samples, channels, sample_rate)) = pcm_opt {
-            let start_sample = (start * sample_rate as f32 * channels as f32) as usize;
-            let end_sample = ((start + duration) * sample_rate as f32 * channels as f32) as usize;
+            let start_sample = (start * (sample_rate as f32) * (channels as f32)) as usize;
+            let end_sample = ((start + duration) *
+                (sample_rate as f32) *
+                (channels as f32)) as usize;
             let end_sample = end_sample.min(samples.len());
 
             if start_sample >= end_sample || start_sample >= samples.len() {
@@ -88,7 +99,7 @@ impl AudioContext {
                 self.manage_active_sinks(&mut key_sinks);
                 key_sinks.insert(
                     format!("{}-{}", key, if is_keydown { "down" } else { "up" }),
-                    sink,
+                    sink
                 );
             }
         } else {
@@ -98,24 +109,23 @@ impl AudioContext {
 
     fn manage_active_sinks(&self, key_sinks: &mut std::sync::MutexGuard<HashMap<String, Sink>>) {
         if key_sinks.len() >= self.max_voices {
-            if let Some((old_key, _)) = key_sinks.iter().next().map(|(k, _)| (k.clone(), ())) {
+            if
+                let Some((old_key, _)) = key_sinks
+                    .iter()
+                    .next()
+                    .map(|(k, _)| (k.clone(), ()))
+            {
                 key_sinks.remove(&old_key);
                 let mut pressed = self.key_pressed.lock().unwrap();
                 pressed.insert(old_key, false);
             }
         }
     }
-    pub fn play_mouse_event_sound(&self, button: &str, is_buttondown: bool) {
-        println!(
-            "🖱️ Mouse event received: {} ({})",
-            button,
-            if is_buttondown { "down" } else { "up" }
-        );
 
+    pub fn play_mouse_event_sound(&self, button: &str, is_buttondown: bool) {
         // Check enable_sound from config before playing audio
         let config = AppConfig::load();
         if !config.enable_sound || !config.enable_mouse_sound {
-            println!("🔇 Mouse sound disabled in config, skipping mouse event");
             return;
         }
 
@@ -141,9 +151,17 @@ impl AudioContext {
                 let arr = arr[idx];
                 (arr[0] / 1000.0, arr[1] / 1000.0)
             }
+            Some(arr) if arr.len() == 1 => {
+                // Only buttondown mapping available, ignore buttonup events
+                if !is_buttondown {
+                    return; // Skip buttonup events for buttons with only buttondown mapping
+                }
+                let arr = arr[0];
+                (arr[0] / 1000.0, arr[1] / 1000.0)
+            }
             Some(arr) => {
                 eprintln!(
-                    "Invalid mapping for mouse button '{}': expected 2 elements, got {}",
+                    "Invalid mapping for mouse button '{}': expected 1-2 elements, got {}",
                     button,
                     arr.len()
                 );
@@ -164,13 +182,15 @@ impl AudioContext {
         button: &str,
         start: f32,
         duration: f32,
-        is_buttondown: bool,
+        is_buttondown: bool
     ) {
         let pcm_opt = self.mouse_samples.lock().unwrap().clone();
 
         if let Some((samples, channels, sample_rate)) = pcm_opt {
-            let start_sample = (start * sample_rate as f32 * channels as f32) as usize;
-            let end_sample = ((start + duration) * sample_rate as f32 * channels as f32) as usize;
+            let start_sample = (start * (sample_rate as f32) * (channels as f32)) as usize;
+            let end_sample = ((start + duration) *
+                (sample_rate as f32) *
+                (channels as f32)) as usize;
             let end_sample = end_sample.min(samples.len());
 
             if start_sample >= end_sample || start_sample >= samples.len() {
@@ -194,7 +214,7 @@ impl AudioContext {
                 self.manage_active_mouse_sinks(&mut mouse_sinks);
                 mouse_sinks.insert(
                     format!("{}-{}", button, if is_buttondown { "down" } else { "up" }),
-                    sink,
+                    sink
                 );
             }
         } else {
@@ -204,10 +224,15 @@ impl AudioContext {
 
     fn manage_active_mouse_sinks(
         &self,
-        mouse_sinks: &mut std::sync::MutexGuard<HashMap<String, Sink>>,
+        mouse_sinks: &mut std::sync::MutexGuard<HashMap<String, Sink>>
     ) {
         if mouse_sinks.len() >= self.max_voices {
-            if let Some((old_button, _)) = mouse_sinks.iter().next().map(|(k, _)| (k.clone(), ())) {
+            if
+                let Some((old_button, _)) = mouse_sinks
+                    .iter()
+                    .next()
+                    .map(|(k, _)| (k.clone(), ()))
+            {
                 mouse_sinks.remove(&old_button);
                 let mut pressed = self.mouse_pressed.lock().unwrap();
                 pressed.insert(old_button, false);

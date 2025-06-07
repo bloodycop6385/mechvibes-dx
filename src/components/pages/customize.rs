@@ -1,6 +1,7 @@
 use crate::components::theme_toggler::ThemeToggler;
 use crate::components::ui::{Collapse, ColorPicker, PageHeader, Toggler};
 use crate::utils::config::use_config;
+use crate::utils::delay;
 use dioxus::prelude::*;
 use lucide_dioxus::{Check, Palette, RotateCcw};
 
@@ -174,10 +175,9 @@ fn LogoCustomizationPanel() -> Element {
                 cfg.logo_customization.muted_background = muted_bg;
                 cfg.logo_customization.dimmed_when_muted = dimmed;
             }));
-
             saving.set(true);
             spawn(async move {
-                futures_timer::Delay::new(std::time::Duration::from_millis(1500)).await;
+                delay::Delay::ms(500).await;
                 saving.set(false);
             });
         }
@@ -294,7 +294,9 @@ fn LogoCustomizationPanel() -> Element {
           on_change: move |value| muted_background.set(value),
           field: "muted_background".to_string(),
           description: Some("Background color when sound is disabled".to_string()),
-        } // Dimmed logo when muted option
+        }
+
+        // Dimmed logo when muted option
         Toggler {
           title: "Dimmed logo when muted".to_string(),
           description: Some("Applies opacity to the logo when sound is disabled".to_string()),

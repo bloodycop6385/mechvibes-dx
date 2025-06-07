@@ -16,7 +16,9 @@ fn open_soundpack_folder(soundpack_id: &str) -> Result<(), String> {
 
 /// Delete a soundpack directory and all its contents
 fn delete_soundpack(soundpack_id: &str) -> Result<(), String> {
-    let soundpack_path = paths::soundpacks::soundpack_dir(soundpack_id); // Check if the directory exists
+    let soundpack_path = paths::soundpacks::soundpack_dir(soundpack_id);
+
+    // Check if the directory exists
     if !path::directory_exists(&soundpack_path) {
         return Err(format!("Soundpack directory not found: {}", soundpack_path));
     }
@@ -86,7 +88,8 @@ pub fn SoundpackTable(
                   "Add"
                 }
               }
-            } // Table
+            }
+            // Table
             div { class: "overflow-x-auto max-h-[calc(100vh-500px)]",
               if filtered_soundpacks.is_empty() {
                 div { class: "p-4 text-center text-base-content/70",
