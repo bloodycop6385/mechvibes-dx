@@ -4,6 +4,15 @@ version = "0.1.0"
 authors = ["Hải Nguyễn <hainguyen.ts13@gmail.com>"]
 edition = "2021"
 
+[lib]
+name = "mechvibes_dx"
+path = "src/lib.rs"
+
+# Service binary for privileged operations
+[[bin]]
+name = "mechvibes-dx-service"
+path = "src/bin/service.rs"
+
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
@@ -28,12 +37,20 @@ image = "0.24"
 serde = "1.0.218"
 serde_json = "1.0.140"
 strum = { version = "0.26", features = ["derive"] }
+tokio = { version = "1.0", features = ["full"] }
 tray-icon = "0.14"
 
 [target.'cfg(windows)'.dependencies]
 winreg = "0.52"
 zip = "2.2.0"
-winapi = { version = "0.3", features = ["wincon", "winuser"] }
+winapi = { version = "0.3", features = [
+  "wincon",
+  "winuser",
+  "processthreadsapi",
+  "securitybaseapi",
+  "winnt",
+  "handleapi",
+] }
 
 
 [build-dependencies]

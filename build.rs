@@ -13,15 +13,15 @@ const SOUNDPACKS_DIR: &str = "./soundpacks";
 fn main() {
     println!("cargo:rerun-if-changed=app.config.json");
     println!("cargo:rerun-if-changed=build.rs");
-    println!("cargo:rerun-if-changed=assets/icon.ico");
-
-    // Set Windows app icon and metadata
+    println!("cargo:rerun-if-changed=assets/icon.ico"); // Set Windows app icon and metadata
     #[cfg(target_os = "windows")]
     {
         use std::path::Path;
         if Path::new("assets/icon.ico").exists() {
             let mut res = winresource::WindowsResource::new();
-            res.set_icon("assets/icon.ico"); // Set version information
+            res.set_icon("assets/icon.ico");
+
+            // Set version information
             res.set("CompanyName", "Hải Nguyễn");
             res.set(
                 "FileDescription",
@@ -30,12 +30,43 @@ fn main() {
             res.set("LegalCopyright", "Copyright © 2025 Hải Nguyễn");
             res.set("ProductName", "MechVibes DX");
             res.set("ProductVersion", "0.1.0");
-            res.set("FileVersion", "0.1.0");
+            res.set("FileVersion", "0.1.0"); // Check build profile and environment variables for admin privileges requirement
+            let force_admin =
+                env::var("MECHVIBES_FORCE_ADMIN").unwrap_or_default().to_lowercase() == "true";
+            let skip_admin =
+                env::var("MECHVIBES_NO_ADMIN").unwrap_or_default().to_lowercase() == "true";
+
+            // Default behavior (CHANGED for better UX):
+            // - All builds: Standard user privileges by default (no UAC prompts)
+            // - Admin mode only when explicitly requested via MECHVIBES_FORCE_ADMIN=true
+            // This provides better user experience while keeping admin functionality available
+            let request_admin = if skip_admin {
+                false // Explicitly skip admin privileges
+            } else if force_admin {
+                true // Explicitly request admin privileges
+            } else {
+                false // Default: standard user privileges for all builds
+            };
+            if request_admin {
+                println!("🔐 Building with administrator privileges manifest");
+                println!("   ↳ Admin privileges enabled via MECHVIBES_FORCE_ADMIN=true");
+                println!("   ↳ This will require UAC prompt on every startup");
+                res.set_manifest(create_admin_manifest());
+            } else {
+                println!("👤 Building with standard user privileges manifest");
+                if skip_admin {
+                    println!("   ↳ Admin privileges explicitly disabled (MECHVIBES_NO_ADMIN=true)");
+                } else {
+                    println!("   ↳ Default build - no UAC prompts, good user experience");
+                    println!("   ↳ Use MECHVIBES_FORCE_ADMIN=true for admin mode if needed");
+                }
+                res.set_manifest(create_standard_manifest());
+            }
 
             if let Err(e) = res.compile() {
                 eprintln!("Warning: Failed to compile Windows resources: {}", e);
             } else {
-                println!("✅ Windows resources compiled successfully");
+                println!("✅ Windows resources compiled successfully with UAC manifest");
             }
         } else {
             eprintln!("Warning: assets/icon.ico not found, skipping Windows resource compilation");
@@ -153,4 +184,72 @@ fn get_target_platform() -> &'static str {
     } else {
         "unknown"
     }
+}
+
+fn create_admin_manifest() -> &'static str {
+    r#"
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">
+  <assemblyIdentity
+    version="1.0.0.0"
+    processorArchitecture="*"
+    name="MechVibesDX"
+    type="win32"
+  />
+  <description>MechVibes DX - Enhanced mechanical keyboard sound simulator (Administrator Mode)</description>
+  <trustInfo xmlns="urn:schemas-microsoft-com:asm.v3">
+    <security>
+      <requestedPrivileges xmlns="urn:schemas-microsoft-com:asm.v3">
+        <requestedExecutionLevel level="requireAdministrator" uiAccess="false" />
+      </requestedPrivileges>
+    </security>
+  </trustInfo>
+  <compatibility xmlns="urn:schemas-microsoft-com:compatibility.v1">
+    <application>
+      <!-- Windows 10 and Windows 11 -->
+      <supportedOS Id="{8e0f7a12-bfb3-4fe8-b9a5-48fd50a15a9a}"/>
+      <!-- Windows 8.1 -->
+      <supportedOS Id="{1f676c76-80e1-4239-95bb-83d0f6d0da78}"/>
+      <!-- Windows 8 -->
+      <supportedOS Id="{4a2f28e3-53b9-4441-ba9c-d69d4a4a6e38}"/>
+      <!-- Windows 7 -->
+      <supportedOS Id="{35138b9a-5d96-4fbd-8e2d-a2440225f93a}"/>
+    </application>
+  </compatibility>
+</assembly>
+"#
+}
+
+fn create_standard_manifest() -> &'static str {
+    r#"
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">
+  <assemblyIdentity
+    version="1.0.0.0"
+    processorArchitecture="*"
+    name="MechVibesDX"
+    type="win32"
+  />
+  <description>MechVibes DX - Enhanced mechanical keyboard sound simulator</description>
+  <trustInfo xmlns="urn:schemas-microsoft-com:asm.v3">
+    <security>
+      <requestedPrivileges xmlns="urn:schemas-microsoft-com:asm.v3">
+        <requestedExecutionLevel level="asInvoker" uiAccess="false" />
+      </requestedPrivileges>
+    </security>
+  </trustInfo>
+  <compatibility xmlns="urn:schemas-microsoft-com:compatibility.v1">
+    <application>
+      <!-- Windows 10 and Windows 11 -->
+      <supportedOS Id="{8e0f7a12-bfb3-4fe8-b9a5-48fd50a15a9a}"/>
+      <!-- Windows 8.1 -->
+      <supportedOS Id="{1f676c76-80e1-4239-95bb-83d0f6d0da78}"/>
+      <!-- Windows 8 -->
+      <supportedOS Id="{4a2f28e3-53b9-4441-ba9c-d69d4a4a6e38}"/>
+      <!-- Windows 7 -->
+      <supportedOS Id="{35138b9a-5d96-4fbd-8e2d-a2440225f93a}"/>
+    </application>
+  </compatibility>
+</assembly>
+"#
 }

@@ -5,7 +5,7 @@
 pub const APP_NAME: &str = "MechvibesDX";
 
 /// The display name with spaces for better readability
-pub const APP_NAME_DISPLAY: &str = "MechVibes DX";
+pub const APP_NAME_DISPLAY: &str = "MechvibesDX";
 
 /// The lowercase version for file names, URLs, etc.
 pub const APP_NAME_LOWERCASE: &str = "mechvibes-dx";
@@ -24,10 +24,13 @@ pub const APP_DESCRIPTION_SHORT: &str = "MechvibesDX";
 
 /// Long description of the application
 pub const APP_DESCRIPTION_LONG: &str =
-    "MechvibesDX is a modern, cross-platform soundboard for mechanical keyboards. It supports a wide range of keyboard sounds and is designed to be user-friendly and customizable.";
+    "Mechvibes is a flexible sound simulator that enhances your typing experience with customizable audio feedback";
 
 /// Version of the application (should match Cargo.toml)
 pub const APP_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 /// CSS ID prefix for custom styles
 pub const CSS_ID_PREFIX: &str = "mechvibes";
+
+/// Path to the application icon
+pub const APP_ICON_PATH: &str = "assets/icon.ico";
