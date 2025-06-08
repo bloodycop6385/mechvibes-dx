@@ -4,7 +4,7 @@ use tray_icon::{
     TrayIcon,
     TrayIconBuilder,
 };
-use crate::utils::constants::APP_NAME;
+use crate::utils::constants::{ APP_NAME, APP_ICON_PATH };
 
 pub enum TrayMessage {
     Show,
@@ -69,17 +69,17 @@ impl TrayManager {
                 &separator,
                 &exit_item,
             ]
-        )?;
+        )?; // Load the icon from the specified path
+        let icon = Icon::from_path(APP_ICON_PATH, Some((32, 32))).expect("Failed to load icon");
 
-        // Load the icon from the specified path
-        let icon = Icon::from_path("assets/logo-noise.ico", Some((32, 32))).expect(
-            "Failed to load icon"
-        ); // Build the tray icon
+        // Build the tray icon
         let tray_icon = TrayIconBuilder::new()
             .with_menu(Box::new(menu))
             .with_tooltip(APP_NAME)
             .with_icon(icon)
             .build()?;
+
+        //
         Ok(TrayManager {
             tray_icon: tray_icon,
         })

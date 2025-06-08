@@ -3,6 +3,7 @@
 
 mod components;
 mod libs;
+mod service;
 mod state;
 mod utils;
 
@@ -12,7 +13,7 @@ use libs::protocol;
 use utils::constants::{ APP_NAME, APP_PROTOCOL_URL };
 use libs::ui;
 use libs::window_manager::{ WindowAction, WINDOW_MANAGER };
-use libs::input_listener::start_unified_input_listener;
+use libs::input_service::InputService;
 use libs::input_manager::init_input_channels;
 use std::sync::mpsc;
 
@@ -26,7 +27,7 @@ fn should_show_console() -> bool {
 }
 
 // Use .ico format for better Windows compatibility
-const EMBEDDED_ICON: &[u8] = include_bytes!("../assets/logo-noise.ico");
+const EMBEDDED_ICON: &[u8] = include_bytes!("../assets/icon.ico");
 
 fn load_icon() -> Option<dioxus::desktop::tao::window::Icon> {
     // Try to create icon from embedded ICO data
@@ -56,6 +57,24 @@ fn main() {
     // Initialize debug logging first
     utils::logger::init_debug_logging();
 
+    // Check for command line arguments first
+    let args: Vec<String> = std::env::args().collect();
+
+    // Check if we should run as service daemon
+    if args.contains(&"--service".to_string()) {
+        // Run as service daemon
+        tokio::runtime::Runtime
+            ::new()
+            .unwrap()
+            .block_on(async {
+                if let Err(e) = service::daemon::run_service().await {
+                    eprintln!("❌ Service error: {}", e);
+                    std::process::exit(1);
+                }
+            });
+        return;
+    }
+
     // Hide console window if debug console is disabled in config
     if !should_show_console() {
         #[cfg(windows)]
@@ -72,9 +91,27 @@ fn main() {
 
     debug_print!("🚀 Initializing {}...", APP_NAME);
 
+    // Check and log current privilege level
+    #[cfg(target_os = "windows")]
+    {
+        let privilege_level = utils::admin::get_privilege_level_description();
+        if utils::admin::is_running_as_admin() {
+            debug_print!("🔐 Running with {} privileges", privilege_level);
+            debug_print!("✅ Input capture from elevated processes is enabled");
+        } else {
+            debug_print!("👤 Running with {} privileges", privilege_level);
+            debug_print!("⚠️ Administrator privileges not available");
+            debug_print!(
+                "💡 This may be because UAC was declined or app was built without admin manifest"
+            );
+            debug_print!(
+                "ℹ️ Input capture may be limited for elevated processes like Task Manager"
+            );
+        }
+    }
+
     // Initialize app manifest first
     let _manifest = state::manifest::AppManifest::load(); // Check for command line arguments (protocol handling and startup options)
-    let args: Vec<String> = std::env::args().collect();
     debug_print!("🔍 Command line args: {:?}", args); // Check if we should start minimized (from auto-startup)
     let should_start_minimized =
         args.contains(&"--minimized".to_string()) ||
@@ -113,6 +150,10 @@ fn main() {
     // }    // Initialize global app state before rendering
     state::app::init_app_state();
 
+    // Load config to check admin mode setting
+    let config = state::config::AppConfig::load();
+    let use_service_input = config.admin_mode_enabled;
+
     // Create input event channels for communication between input listener and UI
     let (keyboard_tx, keyboard_rx) = mpsc::channel::<String>();
     let (mouse_tx, mouse_rx) = mpsc::channel::<String>();
@@ -121,9 +162,30 @@ fn main() {
     // Initialize global input channels for UI to access
     init_input_channels(keyboard_rx, mouse_rx, hotkey_rx);
 
-    // Start the unified input listener early in main
-    debug_print!("🎮 Starting unified input listener from main...");
-    start_unified_input_listener(keyboard_tx, mouse_tx, hotkey_tx);
+    // Start input capture (service-based or local)
+    debug_print!("🎮 Starting input capture system...");
+    let mut input_service = InputService::new();
+
+    // Start input capture in a separate task since it's async
+    let keyboard_tx_clone = keyboard_tx.clone();
+    let mouse_tx_clone = mouse_tx.clone();
+    let hotkey_tx_clone = hotkey_tx.clone();
+
+    tokio::runtime::Runtime
+        ::new()
+        .unwrap()
+        .spawn(async move {
+            if
+                let Err(e) = input_service.start_input_capture(
+                    keyboard_tx_clone,
+                    mouse_tx_clone,
+                    hotkey_tx_clone,
+                    use_service_input
+                ).await
+            {
+                eprintln!("❌ Failed to start input capture: {}", e);
+            }
+        });
 
     // Create window action channel
     let (window_tx, _window_rx) = mpsc::channel::<WindowAction>();
