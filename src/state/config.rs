@@ -50,6 +50,7 @@ pub struct AppConfig {
     pub admin_mode_enabled: bool, // Enable admin mode via Task Scheduler (no UAC prompts)
     pub show_notifications: bool,
     pub show_debug_console: bool, // Show/hide debug console window
+    pub landscape_mode: bool, // Enable/disable landscape mode layout
 }
 
 impl AppConfig {
@@ -116,6 +117,7 @@ impl Default for AppConfig {
             admin_mode_enabled: false, // Default admin mode disabled (no UAC prompts)
             show_notifications: true,
             show_debug_console: false, // Default debug console disabled
+            landscape_mode: false, // Default landscape mode disabled
         }
     }
 }

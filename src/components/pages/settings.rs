@@ -1,40 +1,25 @@
 use crate::components::ui::{ Collapse, PageHeader, Toggler };
 use crate::libs::theme::{ use_theme, BuiltInTheme, Theme };
 use crate::libs::tray_service::request_tray_update;
-use crate::service::ServiceManager;
 use crate::utils::config::use_config;
 use crate::utils::constants::{ APP_NAME_DISPLAY, APP_NAME };
 use dioxus::prelude::*;
 use lucide_dioxus::Settings;
 
 #[component]
-#[allow(non_snake_case)]
 pub fn SettingsPage() -> Element {
     // Use shared config hook
-    let (config, update_config) = use_config();
-
-    // Use computed signals that always reflect current config state
+    let (config, update_config) = use_config(); // Use computed signals that always reflect current config state
     let enable_sound = use_memo(move || config().enable_sound);
     let auto_start = use_memo(move || config().auto_start);
     let start_minimized = use_memo(move || config().start_minimized);
-    let admin_mode_enabled = use_memo(move || config().admin_mode_enabled);
     let show_notifications = use_memo(move || config().show_notifications);
     let show_debug_console = use_memo(move || config().show_debug_console);
-    // Service manager state (not needed as variable, just for status tracking)
-    let service_status = use_signal(|| "Checking service status...".to_string()); // Initialize service status
-    use_effect(move || {
-        let mut service_status = service_status.clone();
-        spawn(async move {
-            let mut manager = ServiceManager::new();
-            let status = manager.get_status_description().await;
-            service_status.set(status);
-        });
-    });
 
     // Theme state - use theme context (initialized in Layout component)
     let mut theme = use_theme();
     rsx! {
-      div { class: "p-12 pb-32", // Page header
+      div { class: "p-12", // Page header
         PageHeader {
           title: "Settings".to_string(),
           subtitle: format!("Config your {} experience.", APP_NAME_DISPLAY),
@@ -146,7 +131,8 @@ pub fn SettingsPage() -> Element {
                           );
                       }
                   },
-                } // Debug Console
+                }
+                // Debug Console
                 Toggler {
                   title: "Show Debug Console".to_string(),
                   description: Some("Show terminal window for debugging (requires restart)".to_string()),
@@ -161,107 +147,6 @@ pub fn SettingsPage() -> Element {
                           );
                       }
                   },
-                } // Administrator Mode (Service) - Windows only
-                if cfg!(target_os = "windows") {
-                  div { class: "space-y-4",
-                    h4 { class: "font-medium text-base-content", "Administrator Mode" }
-                    // Service status display
-                    div { class: "alert alert-info",
-                      div { class: "flex items-center gap-3",
-                        span { class: "text-info text-xl", "🛡️" }
-                        div {
-                          div { class: "font-medium", "Service Status" }
-                          div { class: "text-sm opacity-70 mt-1", "{service_status()}" }
-                        }
-                      }
-                    } // Admin mode toggle
-                    Toggler {
-                      title: "Enable Administrator Mode".to_string(),
-                      description: Some(
-                          "Install privileged service for full input capture (no UAC prompts after setup)"
-                              .to_string(),
-                      ),
-                      checked: admin_mode_enabled(),
-                      on_change: {
-                          let update_config = update_config.clone();
-                          let service_status = service_status.clone();
-                          move |new_value: bool| {
-                              {
-                                  let update_config = update_config.clone();
-                                  update_config(
-                                      Box::new(move |config| {
-                                          config.admin_mode_enabled = new_value;
-                                      }),
-                                  );
-                              }
-                              {
-                                  let mut service_status = service_status.clone();
-                                  let update_config = update_config.clone();
-                                  spawn(async move {
-                                      let manager = ServiceManager::new();
-                                      if new_value {
-                                          service_status.set("Installing service...".to_string());
-                                          match manager.install_service().await {
-                                              Ok(_) => {
-                                                  match manager.start_service().await {
-                                                      Ok(_) => {
-                                                          service_status
-                                                              .set("Service installed and running".to_string());
-                                                      }
-                                                      Err(e) => {
-                                                          service_status
-                                                              .set(
-                                                                  format!("Service installed but failed to start: {}", e),
-                                                              );
-                                                      }
-                                                  }
-                                              }
-                                              Err(e) => {
-                                                  service_status
-                                                      .set(format!("Failed to install service: {}", e));
-                                                  update_config(
-                                                      Box::new(move |config| {
-                                                          config.admin_mode_enabled = false;
-                                                      }),
-                                                  );
-                                              }
-                                          }
-                                      } else {
-                                          service_status.set("Uninstalling service...".to_string());
-                                          match manager.uninstall_service().await {
-                                              Ok(_) => {
-                                                  service_status.set("Service uninstalled".to_string());
-                                              }
-                                              Err(e) => {
-                                                  service_status
-                                                      .set(format!("Failed to uninstall service: {}", e));
-                                              }
-                                          }
-                                      }
-                                  });
-                              }
-                          }
-                      },
-                    }
-                    // Information about admin mode
-                    div { class: "text-sm text-base-content/70 bg-base-100 p-3 rounded-lg border border-base-300",
-                      p { class: "mb-2",
-                        "Administrator Mode uses a Windows Service to provide elevated privileges without UAC prompts."
-                      }
-                      p { class: "mb-2", "Benefits of Administrator Mode:" }
-                      ul { class: "list-disc list-inside space-y-1 ml-2",
-                        li { "Capture input from elevated processes (Task Manager, UAC dialogs, etc.)" }
-                        li { "No UAC prompts after initial service installation" }
-                        li { "Reliable system-level input event access" }
-                        li { "Better compatibility with security software" }
-                      }
-                      if !admin_mode_enabled() {
-                        p { class: "mt-3 text-warning font-medium",
-                          "⚠️ Without Administrator Mode, input capture may be blocked by elevated processes."
-                        }
-                      }
-                    }
-                  }
                 }
               }
             },
