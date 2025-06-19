@@ -7,9 +7,7 @@ use std::fs;
 /// Load soundpack metadata from config.json
 pub fn load_soundpack_metadata(soundpack_id: &str) -> Result<SoundpackMetadata, String> {
     let config_path = paths::soundpacks::config_json(soundpack_id);
-    let mut last_error: Option<String> = None;
-
-    // Validate the soundpack configuration first
+    let mut last_error: Option<String> = None; // Validate the soundpack configuration first
     let validation_result = validate_soundpack_config(&config_path);
 
     // If it's a V1 config that can be converted, auto-convert it
@@ -17,41 +15,90 @@ pub fn load_soundpack_metadata(soundpack_id: &str) -> Result<SoundpackMetadata, 
         validation_result.status == SoundpackValidationStatus::VersionOneNeedsConversion &&
         validation_result.can_be_converted
     {
-        println!("🔄 Auto-converting V1 soundpack '{}' to V2 format", soundpack_id);
-
         // Create backup of original config
         let backup_path = format!("{}.v1.backup", config_path);
         if let Err(e) = fs::copy(&config_path, &backup_path) {
             let error_msg = format!("Failed to create backup for {}: {}", soundpack_id, e);
-            println!("⚠️  {}", error_msg);
             last_error = Some(error_msg);
-        }
-
-        // Convert V1 to V2
+        } // Convert V1 to V2
         match config_converter::convert_v1_to_v2(&config_path, &config_path, None) {
             Ok(()) => {
-                println!("✅ Successfully converted {} from V1 to V2", soundpack_id);
+                // Successfully converted
             }
             Err(e) => {
                 let error_msg = format!("Failed to convert {} from V1 to V2: {}", soundpack_id, e);
-                println!("❌ {}", error_msg);
                 // Restore backup if conversion failed
                 if fs::copy(&backup_path, &config_path).is_ok() {
-                    println!("🔙 Restored original config from backup");
+                    // Restored backup
                 }
                 // Return error for conversion failure
                 return Err(error_msg);
             }
         }
     }
-
     let content = fs
         ::read_to_string(&config_path)
         .map_err(|e| format!("Failed to read config: {}", e))?;
 
-    let config: serde_json::Value = serde_json
+    let mut config: serde_json::Value = serde_json
         ::from_str(&content)
         .map_err(|e| format!("Failed to parse config: {}", e))?;
+
+    // Check if this is V2 config with multi method and convert to single method
+    if let Some(definition_method) = config.get("definition_method").and_then(|v| v.as_str()) {
+        if definition_method == "multi" {
+            println!("🔄 [CACHE DEBUG] Found V2 multi method config, converting to single method");
+            let soundpack_dir = paths::soundpacks::soundpack_dir(soundpack_id);
+
+            if
+                let Err(e) = config_converter::convert_v2_multi_to_single(
+                    &config_path,
+                    &soundpack_dir
+                )
+            {
+                println!("❌ [CACHE DEBUG] Failed to convert multi to single: {}", e);
+                return Err(format!("Failed to convert multi to single method: {}", e));
+            }
+
+            // Re-read the converted config
+            let new_content = fs
+                ::read_to_string(&config_path)
+                .map_err(|e| format!("Failed to re-read converted config: {}", e))?;
+            config = serde_json
+                ::from_str(&new_content)
+                .map_err(|e| format!("Failed to parse converted config: {}", e))?;
+
+            println!("✅ [CACHE DEBUG] Successfully converted to single method");
+        }
+    }
+
+    // Debug: Check if config has audio_file field
+    let audio_file = config.get("audio_file").and_then(|v| v.as_str());
+    println!("🔍 [CACHE DEBUG] soundpack_id: {}", soundpack_id);
+    println!("🔍 [CACHE DEBUG] config_path: {}", config_path);
+    println!("🔍 [CACHE DEBUG] audio_file in config: {:?}", audio_file);
+
+    // If audio_file exists, check if the actual file exists
+    if let Some(audio_filename) = audio_file {
+        let soundpack_dir = paths::soundpacks::soundpack_dir(soundpack_id);
+        let full_audio_path = format!(
+            "{}/{}",
+            soundpack_dir,
+            audio_filename.trim_start_matches("./")
+        );
+        println!("🔍 [CACHE DEBUG] soundpack_dir: {}", soundpack_dir);
+        println!("🔍 [CACHE DEBUG] full_audio_path: {}", full_audio_path);
+        println!(
+            "🔍 [CACHE DEBUG] audio file exists: {}",
+            std::path::Path::new(&full_audio_path).exists()
+        );
+
+        if !std::path::Path::new(&full_audio_path).exists() {
+            println!("⚠️ [CACHE DEBUG] Audio file not found during cache refresh: {}", full_audio_path);
+        }
+    } else {
+        println!("⚠️ [CACHE DEBUG] No audio_file field found in config");
+    }
 
     let name = config
         .get("name")
@@ -82,9 +129,8 @@ pub fn load_soundpack_metadata(soundpack_id: &str) -> Result<SoundpackMetadata, 
     let metadata = fs
         ::metadata(&config_path)
         .map_err(|e| format!("Failed to get metadata: {}", e))?;
-
     Ok(SoundpackMetadata {
-        id: soundpack_id.to_string(),
+        id: soundpack_id.to_string(), // Use soundpack_id (with prefix) instead of config ID
         name,
         author: config
             .get("author")
@@ -97,10 +143,6 @@ pub fn load_soundpack_metadata(soundpack_id: &str) -> Result<SoundpackMetadata, 
             .map(|s| s.to_string()),
         version,
         tags,
-        keycap: config
-            .get("keycap")
-            .and_then(|v| v.as_str())
-            .map(|s| s.to_string()),
         icon: {
             // Generate dynamic asset URL
             if let Some(icon_filename) = config.get("icon").and_then(|v| v.as_str()) {
@@ -129,10 +171,21 @@ pub fn load_soundpack_metadata(soundpack_id: &str) -> Result<SoundpackMetadata, 
                 Some(String::new()) // Empty string if no icon specified
             }
         },
-        mouse: config
-            .get("mouse")
-            .and_then(|v| v.as_bool())
-            .unwrap_or(false), // Default to false (keyboard soundpack)
+        soundpack_type: {
+            // Determine soundpack type based on folder path (more reliable than JSON content)
+            if soundpack_id.starts_with("keyboard/") || soundpack_id.starts_with("keyboard\\") {
+                crate::state::soundpack::SoundpackType::Keyboard
+            } else if soundpack_id.starts_with("mouse/") || soundpack_id.starts_with("mouse\\") {
+                crate::state::soundpack::SoundpackType::Mouse
+            } else {
+                // Fallback to JSON content or default to keyboard
+                match config.get("soundpack_type").and_then(|v| v.as_str()) {
+                    Some("mouse") => crate::state::soundpack::SoundpackType::Mouse,
+                    _ => crate::state::soundpack::SoundpackType::Keyboard,
+                }
+            }
+        },
+        folder_path: soundpack_id.to_string(), // Store the relative path (e.g., "keyboard/Super Paper Mario Talk")
         last_modified: metadata
             .modified()
             .unwrap_or(std::time::SystemTime::UNIX_EPOCH)

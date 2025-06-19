@@ -7,13 +7,11 @@ use crate::libs::AudioContext;
 use crate::state::keyboard::KeyboardState;
 use crate::utils::delay;
 use crate::utils::path;
-use crate::utils::constants::APP_NAME;
 use crate::{ debug_print, always_eprint };
 
 use dioxus::prelude::*;
 use dioxus_router::prelude::Router;
 use dioxus::desktop::{ use_asset_handler, wry::http::Response };
-use notify_rust::Notification;
 use std::sync::Arc;
 
 pub fn app() -> Element {
@@ -43,6 +41,21 @@ pub fn app() -> Element {
             crate::state::app::reload_current_soundpacks(&ctx);
         });
     }
+
+    // Check for updates on startup (from completely closed state)
+    use_effect(move || {
+        spawn(async move {
+            if
+                let Ok(update_info) =
+                    crate::utils::auto_updater::check_for_updates_on_startup().await
+            {
+                debug_print!("🔄 Startup update check completed");
+                if update_info.update_available {
+                    debug_print!("🆕 Update available on startup: {}", update_info.latest_version);
+                }
+            }
+        });
+    });
 
     // Extract receivers from input channels
     let keyboard_rx = input_channels.keyboard_rx.clone();
@@ -107,14 +120,9 @@ pub fn app() -> Element {
                 }
             }
         });
-    }
-
-    // Process hotkey Ctrl+Alt+M to toggle global sound
+    } // Process hotkey Ctrl+Alt+M to toggle global sound
     {
         let hotkey_rx = hotkey_rx.clone();
-
-        // Create signals for debounced notification system using atomic counter pattern
-        let notification_counter = use_signal(|| Arc::new(std::sync::atomic::AtomicU64::new(0)));
 
         use_future(move || {
             let hotkey_rx = hotkey_rx.clone();
@@ -131,47 +139,7 @@ pub fn app() -> Element {
                                     Ok(_) => {
                                         // Request tray menu update to reflect the new sound state
                                         request_tray_update();
-
-                                        // Handle debounced notifications
-                                        if config.show_notifications {
-                                            // Increment counter to invalidate previous notification tasks
-                                            let current_task_id =
-                                                notification_counter().fetch_add(
-                                                    1,
-                                                    std::sync::atomic::Ordering::SeqCst
-                                                ) + 1;
-
-                                            // Store the current sound state for the delayed notification
-                                            let current_state = config.enable_sound;
-                                            let notification_counter_clone = notification_counter();
-
-                                            // Start a new delayed notification task
-                                            spawn(async move {
-                                                // Wait for 1s
-                                                delay::Delay::ms(1000).await;
-
-                                                // Check if this task is still the latest one
-                                                if
-                                                    notification_counter_clone.load(
-                                                        std::sync::atomic::Ordering::SeqCst
-                                                    ) == current_task_id
-                                                {
-                                                    // Show notification with the final state
-                                                    let message = if current_state {
-                                                        "Global sound enabled"
-                                                    } else {
-                                                        "Global sound disabled"
-                                                    };
-                                                    let _ = Notification::new()
-                                                        .summary(APP_NAME)
-                                                        .body(message)
-                                                        .timeout(3000) // 3 seconds
-                                                        .show();
-                                                } else {
-                                                    debug_print!("🚫 Notification task {} cancelled due to newer hotkey press", current_task_id);
-                                                }
-                                            });
-                                        }
+                                        debug_print!("🔄 Sound toggled: {}", config.enable_sound);
                                     }
                                     Err(e) => {
                                         always_eprint!("❌ Failed to save config after sound toggle: {}", e);
@@ -184,22 +152,34 @@ pub fn app() -> Element {
                 }
             }
         });
-    }
+    } // Initialize update service for background update checking
+    #[cfg(feature = "auto-update")]
+    {
+        use crate::utils::auto_updater::UpdateService;
+        use std::sync::Arc;
+        use tokio::sync::Mutex;
+        use_future(move || async move {
+            let config = Arc::new(Mutex::new(crate::state::config::AppConfig::load()));
+            let update_service = UpdateService::new(config);
 
-    // Set up asset handler for serving soundpack images
+            // Start background update checking
+            update_service.start().await;
+        });
+    } // Set up asset handler for serving soundpack images
     use_asset_handler("soundpack-images", |request, response| {
         let request_path = request.uri().path();
 
-        // Parse the path: /soundpack-images/{soundpack_id}/{filename}
+        // Parse the path: /soundpack-images/{device_type}/{soundpack_name}/{filename}
         let path_parts: Vec<&str> = request_path.trim_start_matches('/').split('/').collect();
 
-        if path_parts.len() == 3 && path_parts[0] == "soundpack-images" {
-            let soundpack_id = path_parts[1];
-            let filename = path_parts[2];
+        if path_parts.len() >= 4 && path_parts[0] == "soundpack-images" {
+            // Join device_type/soundpack_name to form the full soundpack_id
+            let soundpack_id = format!("{}/{}", path_parts[1], path_parts[2]);
+            let filename = path_parts[3];
 
             // Get the soundpack directory path using the correct function
             let soundpacks_path = std::path::PathBuf::from(path::get_soundpacks_dir_absolute());
-            let image_path = soundpacks_path.join(soundpack_id).join(filename);
+            let image_path = soundpacks_path.join(&soundpack_id).join(filename);
 
             if image_path.exists() {
                 // Read the file and determine content type
@@ -251,10 +231,10 @@ pub fn app() -> Element {
     });
 
     rsx! {
-      // prettier-ignore
-      WindowController {}
-      // prettier-ignore
-      Header {}
-      Router::<Route> {}
+        // prettier-ignore
+        WindowController {}
+        // prettier-ignore
+        Header {}
+        Router::<Route> {}
     }
 }

@@ -1,8 +1,8 @@
-use rdev::{listen, Button, Event, EventType, Key};
+use rdev::{ listen, Button, Event, EventType, Key };
 use std::collections::HashSet;
-use std::sync::{mpsc::Sender, Arc, Mutex};
+use std::sync::{ mpsc::Sender, Arc, Mutex };
 use std::thread;
-use std::time::{Duration, Instant};
+use std::time::{ Duration, Instant };
 
 // Maps a keyboard key to its standardized code
 fn map_key_to_code(key: Key) -> &'static str {
@@ -37,8 +37,7 @@ fn map_key_to_code(key: Key) -> &'static str {
         Key::End => "End",
         Key::PageUp => "PageUp",
         Key::PageDown => "PageDown",
-
-        // Function keys
+        Key::Insert => "Insert", // Function keys F1-F12 (rdev 0.5.3 only supports F1-F12)
         Key::F1 => "F1",
         Key::F2 => "F2",
         Key::F3 => "F3",
@@ -93,16 +92,46 @@ fn map_key_to_code(key: Key) -> &'static str {
         Key::Num9 => "Digit9",
 
         // Punctuation and symbols
-        Key::Minus => "Minus",         // -
-        Key::Equal => "Equal",         // =
-        Key::Comma => "Comma",         // ,
-        Key::Dot => "Period",          // .
-        Key::Quote => "Quote",         // '
+        Key::Minus => "Minus", // -
+        Key::Equal => "Equal", // =
+        Key::Comma => "Comma", // ,
+        Key::Dot => "Period", // .
+        Key::Quote => "Quote", // '
         Key::BackQuote => "Backquote", // `
-        Key::Slash => "Slash",         // /
+        Key::Slash => "Slash", // /
+        Key::LeftBracket => "BracketLeft", // [
+        Key::RightBracket => "BracketRight", // ]
+        Key::BackSlash => "Backslash", // \
+        Key::SemiColon => "Semicolon", // ;
+        Key::IntlBackslash => "IntlBackslash", // Additional backslash key on some keyboards
+
+        // Numpad keys
+        Key::KpReturn => "NumpadEnter",
+        Key::KpMinus => "NumpadSubtract",
+        Key::KpPlus => "NumpadAdd",
+        Key::KpMultiply => "NumpadMultiply",
+        Key::KpDivide => "NumpadDivide",
+        Key::Kp0 => "Numpad0",
+        Key::Kp1 => "Numpad1",
+        Key::Kp2 => "Numpad2",
+        Key::Kp3 => "Numpad3",
+        Key::Kp4 => "Numpad4",
+        Key::Kp5 => "Numpad5",
+        Key::Kp6 => "Numpad6",
+        Key::Kp7 => "Numpad7",
+        Key::Kp8 => "Numpad8",
+        Key::Kp9 => "Numpad9",
+        Key::KpDelete => "NumpadDecimal",
+
+        // Additional system keys
+        Key::NumLock => "NumLock",
+        Key::ScrollLock => "ScrollLock",
+        Key::PrintScreen => "PrintScreen",
+        Key::Pause => "Pause",
+        Key::Function => "Fn", // Special function key on some keyboards
 
         // Unknown or unmapped keys
-        _ => "",
+        Key::Unknown(_) => "", // Handle unknown keys gracefully
     }
 }
 
@@ -131,7 +160,7 @@ fn map_button_to_code(button: Button) -> &'static str {
 pub fn start_unified_input_listener(
     keyboard_tx: Sender<String>,
     mouse_tx: Sender<String>,
-    hotkey_tx: Sender<String>,
+    hotkey_tx: Sender<String>
 ) {
     println!("🎮 Starting unified input listener (keyboard + mouse + hotkeys)...");
 
@@ -147,7 +176,6 @@ pub fn start_unified_input_listener(
         // Track pressed modifier keys for hotkey detection
         let mut ctrl_pressed = false;
         let mut alt_pressed = false;
-
         let result = listen(move |event: Event| {
             match event.event_type {
                 // ===== KEYBOARD EVENTS =====
@@ -155,11 +183,16 @@ pub fn start_unified_input_listener(
                     let key_code = map_key_to_code(key);
                     if !key_code.is_empty() {
                         // println!("⌨️ Key Pressed: {}", key_code);
+                        // println!("🔍 DEBUG: Key event detected: {}", key_code);
 
                         // Track modifier keys for hotkey detection
                         match key_code {
-                            "ControlLeft" | "ControlRight" => ctrl_pressed = true,
-                            "AltLeft" | "AltRight" => alt_pressed = true,
+                            "ControlLeft" | "ControlRight" => {
+                                ctrl_pressed = true;
+                            }
+                            "AltLeft" | "AltRight" => {
+                                alt_pressed = true;
+                            }
                             "KeyM" => {
                                 // Check for Ctrl+Alt+M hotkey combination
                                 if ctrl_pressed && alt_pressed {
@@ -179,12 +212,17 @@ pub fn start_unified_input_listener(
                             return; // Key already pressed, ignore
                         }
                         pressed.insert(key_code.to_string());
-                        drop(pressed);
-
-                        // Apply debounce
+                        drop(pressed); // Apply debounce and detect rapid key events
                         let now = Instant::now();
                         let mut last = keyboard_last_press.lock().unwrap();
-                        if now.duration_since(*last) > Duration::from_millis(1) {
+                        let time_since_last = now.duration_since(*last);
+
+                        // Special handling for Backspace key - skip if too rapid (< 10ms)
+                        if key_code == "Backspace" && time_since_last < Duration::from_millis(10) {
+                            return; // Skip this Backspace event entirely
+                        }
+
+                        if time_since_last > Duration::from_millis(1) {
                             *last = now;
                             let _ = keyboard_tx.send(key_code.to_string());
                         }
@@ -197,8 +235,12 @@ pub fn start_unified_input_listener(
 
                         // Track modifier key releases for hotkey detection
                         match key_code {
-                            "ControlLeft" | "ControlRight" => ctrl_pressed = false,
-                            "AltLeft" | "AltRight" => alt_pressed = false,
+                            "ControlLeft" | "ControlRight" => {
+                                ctrl_pressed = false;
+                            }
+                            "AltLeft" | "AltRight" => {
+                                alt_pressed = false;
+                            }
                             _ => {}
                         }
 
@@ -216,6 +258,7 @@ pub fn start_unified_input_listener(
                     let button_code = map_button_to_code(button);
                     if !button_code.is_empty() && button_code != "MouseUnknown" {
                         // println!("🖱️ Mouse Button Pressed: {}", button_code);
+                        // println!("🔍 DEBUG: Mouse event detected: {}", button_code);
 
                         // Check if button is already pressed
                         let mut pressed = pressed_buttons.lock().unwrap();
@@ -223,12 +266,24 @@ pub fn start_unified_input_listener(
                             return; // Button already pressed, ignore
                         }
                         pressed.insert(button_code.to_string());
-                        drop(pressed);
-
-                        // Apply debounce
+                        drop(pressed); // Apply debounce and detect rapid mouse events
                         let now = Instant::now();
                         let mut last = mouse_last_press.lock().unwrap();
-                        if now.duration_since(*last) > Duration::from_millis(1) {
+                        let time_since_last = now.duration_since(*last);
+
+                        // General rapid event detection (< 60ms) - log but still process
+                        if
+                            time_since_last < Duration::from_millis(60) &&
+                            time_since_last > Duration::from_millis(1)
+                        {
+                            println!(
+                                "⚡ RAPID MOUSE EVENT detected: '{}' fired {:.1}ms after previous mouse event",
+                                button_code,
+                                time_since_last.as_millis()
+                            );
+                        }
+
+                        if time_since_last > Duration::from_millis(1) {
                             *last = now;
                             let _ = mouse_tx.send(button_code.to_string());
                         }
@@ -247,27 +302,25 @@ pub fn start_unified_input_listener(
                         let _ = mouse_tx.send(format!("UP:{}", button_code));
                     }
                 }
-                EventType::Wheel {
-                    delta_x: _,
-                    delta_y,
-                } => {
-                    let wheel_event = if delta_y > 0 {
-                        "MouseWheelUp"
-                    } else if delta_y < 0 {
-                        "MouseWheelDown"
-                    } else {
-                        return; // No vertical scroll, ignore
-                    };
+                // Skip mouse wheel events for now
+                EventType::Wheel { delta_x: _, delta_y: _ } => {
+                    // let wheel_event = if delta_y > 0 {
+                    //     "MouseWheelUp"
+                    // } else if delta_y < 0 {
+                    //     "MouseWheelDown"
+                    // } else {
+                    //     return; // No vertical scroll, ignore
+                    // };
 
-                    println!("🖱️ Mouse Wheel: {}", wheel_event);
+                    // println!("🖱️ Mouse Wheel: {}", wheel_event);
 
-                    // Apply longer debounce for wheel events
-                    let now = Instant::now();
-                    let mut last = mouse_last_press.lock().unwrap();
-                    if now.duration_since(*last) > Duration::from_millis(50) {
-                        *last = now;
-                        let _ = mouse_tx.send(wheel_event.to_string());
-                    }
+                    // // Apply longer debounce for wheel events
+                    // let now = Instant::now();
+                    // let mut last = mouse_last_press.lock().unwrap();
+                    // if now.duration_since(*last) > Duration::from_millis(50) {
+                    //     *last = now;
+                    //     let _ = mouse_tx.send(wheel_event.to_string());
+                    // }
                 }
                 EventType::MouseMove { x: _, y: _ } => {
                     // Mouse move events are too noisy, ignore them

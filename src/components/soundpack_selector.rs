@@ -6,7 +6,7 @@ use lucide_dioxus::{ Check, ChevronDown, Keyboard, Mouse, Music, Search };
 use std::sync::Arc;
 use std::time::Duration;
 
-#[derive(Clone, PartialEq, Copy)]
+#[derive(Clone, PartialEq, Copy, Debug)]
 pub enum SelectorType {
     Keyboard,
     Mouse,
@@ -58,26 +58,24 @@ fn SoundpackDropdown(soundpack_type: SelectorType) -> Element {
             SelectorType::Keyboard => config.keyboard_soundpack.clone(),
             SelectorType::Mouse => config.mouse_soundpack.clone(),
         }
-    });
-
-    // Filter soundpacks based on search query and type
+    }); // Filter soundpacks based on search query and type, then sort by last_modified
     let filtered_soundpacks = use_memo(move || {
         let query = search_query().to_lowercase();
-        let all_packs = soundpacks();
-
-        // Filter by type first
+        let all_packs = soundpacks(); // Filter by type first
         let type_filtered_packs: Vec<_> = all_packs
             .into_iter()
             .filter(|pack| {
                 match soundpack_type {
-                    SelectorType::Keyboard => !pack.mouse, // Keyboard soundpacks have mouse: false
-                    SelectorType::Mouse => pack.mouse, // Mouse soundpacks have mouse: true
+                    SelectorType::Keyboard =>
+                        pack.soundpack_type == crate::state::soundpack::SoundpackType::Keyboard,
+                    SelectorType::Mouse =>
+                        pack.soundpack_type == crate::state::soundpack::SoundpackType::Mouse,
                 }
             })
             .collect();
 
         // Then filter by search query
-        if query.is_empty() {
+        let mut filtered_packs = if query.is_empty() {
             type_filtered_packs
         } else {
             type_filtered_packs
@@ -88,53 +86,79 @@ fn SoundpackDropdown(soundpack_type: SelectorType) -> Element {
                         pack.tags.iter().any(|tag| tag.to_lowercase().contains(&query))
                 })
                 .collect()
-        }
+        }; // Sort by last_modified in descending order (most recent first)
+        filtered_packs.sort_by(|a, b| b.last_modified.cmp(&a.last_modified));
+
+        filtered_packs
     });
-
-    // Find current soundpack details
-    let current_soundpack = use_memo(move ||
-        soundpacks()
-            .into_iter()
-            .find(|pack| pack.id == current())
-    );
-
-    // Get appropriate placeholder and search text based on type
-    let (placeholder_text, search_placeholder, not_found_text) = match soundpack_type {
+    let current_soundpack = use_memo(
+        move ||
+            soundpacks()
+                .into_iter()
+                .find(|pack| pack.folder_path == current()) // Use folder_path for comparison
+    ); // Get appropriate placeholder and search text based on type
+    let (placeholder_text, search_placeholder, not_found_text, no_soundpack_text) = match
+        soundpack_type
+    {
         SelectorType::Keyboard =>
             (
                 "Select a keyboard soundpack...",
                 "Search keyboard soundpacks...",
                 "No keyboard soundpacks found",
+                "No soundpacks available",
             ),
         SelectorType::Mouse =>
             (
                 "Select a mouse soundpack...",
                 "Search mouse soundpacks...",
                 "No mouse soundpacks found",
+                "No soundpacks available",
             ),
     };
+
+    // Check if there are any soundpacks available for this type
+    let has_soundpacks = use_memo(move || {
+        soundpacks()
+            .into_iter()
+            .any(|pack| {
+                match soundpack_type {
+                    SelectorType::Keyboard =>
+                        pack.soundpack_type == crate::state::soundpack::SoundpackType::Keyboard,
+                    SelectorType::Mouse =>
+                        pack.soundpack_type == crate::state::soundpack::SoundpackType::Mouse,
+                }
+            })
+    });
 
     rsx! {
       div { class: "space-y-2",
         div { class: "relative w-full",
           // Dropdown toggle button
           button {
+            id: format!("soundpack-btn-{:?}", soundpack_type),
             class: format!(
                 "w-full btn btn-soft justify-start gap-3 h-17 rounded-box {}",
                 if is_open() { "btn-active" } else { "" },
             ),
-            disabled: is_loading(),
-            onclick: move |_| is_open.set(!is_open()),
+            style: format!("anchor-name: --soundpack-anchor-{:?};", soundpack_type),
+            disabled: is_loading() || !has_soundpacks(),
+            onclick: move |_| {
+                if has_soundpacks() {
+                    is_open.set(!is_open());
+                }
+            },
             div { class: "flex items-center gap-3 flex-1 ",
-              if let Some(pack) = current_soundpack() {
-                div { class: "flex-shrink-0 overflow-hidden bg-blend-multiply w-11 h-11 bg-base-200 rounded-box flex items-center justify-center",
+              if !has_soundpacks() {
+                div { class: "text-base-content/50 text-sm", "{no_soundpack_text}" }
+              } else if let Some(pack) = current_soundpack() {
+                div { class: "flex-shrink-0 overflow-hidden  w-11 h-11 bg-base-200 rounded-box flex items-center justify-center",
                   if is_loading() {
                     span { class: "loading loading-spinner loading-sm" }
                   } else {
                     if let Some(icon) = &pack.icon {
                       if !icon.is_empty() {
                         img {
-                          class: "w-full h-full object-cover",
+                          class: "w-full h-full bg-blend-multiply object-cover",
                           src: "{icon}",
                         }
                       } else {
@@ -152,6 +176,8 @@ fn SoundpackDropdown(soundpack_type: SelectorType) -> Element {
                   div { class: "text-xs font-normal truncate text-base-content/50",
                     if let Some(author) = &pack.author {
                       "by {author}"
+                    } else {
+                      "by N/A"
                     }
                   }
                 }
@@ -166,16 +192,20 @@ fn SoundpackDropdown(soundpack_type: SelectorType) -> Element {
               ),
             }
           }
-
           // Dropdown panel
-          if is_open() {
-            div { class: "absolute top-full left-0 right-0 mt-1 bg-base-100 border border-base-300 rounded-box shadow-lg z-50 max-h-80 overflow-hidden",
+          if is_open() && has_soundpacks() {
+            div {
+              class: "bg-base-200 border border-base-300 rounded-box shadow-lg z-50 ",
+              style: format!(
+                  "position: absolute; position-anchor: --soundpack-anchor-{:?}; position-area: block-end; width: anchor-size(width); margin-top: 4px;",
+                  soundpack_type,
+              ),
               // Search input
               div { class: "p-3 border-b border-base-200",
                 div { class: "relative",
                   Search { class: "absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-base-content/50" }
                   input {
-                    class: "input input-bordered w-full px-4 py-2 text-base-content placeholder:text-base-content/40",
+                    class: "input input-sm w-full px-4 py-2 text-base-content placeholder:text-base-content/40",
                     placeholder: "{search_placeholder}",
                     value: "{search_query}",
                     oninput: move |evt| search_query.set(evt.value()),
@@ -185,7 +215,7 @@ fn SoundpackDropdown(soundpack_type: SelectorType) -> Element {
               }
 
               // Soundpack list
-              div { class: "overflow-y-auto max-h-60",
+              div { class: "overflow-y-auto max-h-50",
                 if filtered_soundpacks.read().is_empty() {
                   div { class: "p-4 text-center text-base-content/50",
                     "{not_found_text}"
@@ -195,12 +225,13 @@ fn SoundpackDropdown(soundpack_type: SelectorType) -> Element {
                     button {
                       key: "{pack.id}",
                       class: format!(
-                          "w-full px-4 rounded-none py-2 text-left btn btn-lg justify-start gap-4 border-b border-base-200 last:border-b-0 h-auto {}",
-                          if pack.id == current() { "btn-disabled" } else { "btn-ghost" },
+                          "w-full px-4 rounded-none py-2 text-left btn btn-lg justify-start gap-4 border-b border-base-300 last:border-b-0 h-auto {}",
+                          if pack.folder_path == current() { "btn-disabled" } else { "btn-ghost" },
                       ),
-                      disabled: pack.id == current(),
+                      disabled: pack.folder_path == current(),
+                      // Use folder_path for comparison
                       onclick: {
-                          let pack_id = pack.id.clone();
+                          let pack_id = pack.folder_path.clone();
                           let mut error = error.clone();
                           let soundpacks = soundpacks.clone();
                           let mut is_open = is_open.clone();
@@ -213,42 +244,22 @@ fn SoundpackDropdown(soundpack_type: SelectorType) -> Element {
                               is_open.set(false);
                               search_query.set(String::new());
                               error.set(String::new());
-                              if let Some(pack_item) = soundpacks().iter().find(|p| p.id == pack_id) {
-                                  let type_str = match soundpack_type_click {
-                                      SelectorType::Keyboard => "keyboard",
-                                      SelectorType::Mouse => "mouse",
-                                  };
-                                  println!(
-                                      "📦 Found {} soundpack in cache: {}",
-                                      type_str,
-                                      pack_item.name,
-                                  );
+                              if let Some(_) = soundpacks().iter().find(|p| p.folder_path == pack_id) {
                                   let pack_id_clone = pack_id.clone();
                                   let soundpack_type_clone = soundpack_type_click.clone();
                                   update_config(
                                       Box::new(move |config| {
                                           match soundpack_type_clone {
                                               SelectorType::Keyboard => {
-                                                  println!(
-                                                      "💾 Updating keyboard soundpack: {} -> {}",
-                                                      config.keyboard_soundpack,
-                                                      pack_id_clone,
-                                                  );
                                                   config.keyboard_soundpack = pack_id_clone;
                                               }
                                               SelectorType::Mouse => {
-                                                  println!(
-                                                      "💾 Updating mouse soundpack: {} -> {}",
-                                                      config.mouse_soundpack,
-                                                      pack_id_clone,
-                                                  );
                                                   config.mouse_soundpack = pack_id_clone;
                                               }
                                           }
                                       }),
                                   );
                                   let pack_id_async = pack_id.clone();
-                                  let pack_name = pack_item.name.clone();
                                   let audio_ctx_async = audio_ctx.clone();
                                   let mut error_async = error.clone();
                                   let mut is_loading_async = is_loading.clone();
@@ -271,17 +282,7 @@ fn SoundpackDropdown(soundpack_type: SelectorType) -> Element {
                                           }
                                       };
                                       match result {
-                                          Ok(_) => {
-                                              let type_str = match soundpack_type_async {
-                                                  SelectorType::Keyboard => "Keyboard",
-                                                  SelectorType::Mouse => "Mouse",
-                                              };
-                                              println!(
-                                                  "✅ {} soundpack changed to: {} (background loading)",
-                                                  type_str,
-                                                  pack_name,
-                                              );
-                                          }
+                                          Ok(_) => {}
                                           Err(e) => {
                                               let type_str = match soundpack_type_async {
                                                   SelectorType::Keyboard => "keyboard",
@@ -291,31 +292,19 @@ fn SoundpackDropdown(soundpack_type: SelectorType) -> Element {
                                                   .set(
                                                       format!("Failed to load {} soundpack: {}", type_str, e),
                                                   );
-                                              println!(
-                                                  "❌ Failed to load {} soundpack {}: {}",
-                                                  type_str,
-                                                  pack_id_async,
-                                                  e,
-                                              );
                                           }
                                       }
                                       is_loading_async.set(false);
                                   });
-                              } else {
-                                  let type_str = match soundpack_type_click {
-                                      SelectorType::Keyboard => "Keyboard",
-                                      SelectorType::Mouse => "Mouse",
-                                  };
-                                  println!("❌ {} soundpack {} not found in cache", type_str, pack_id);
                               }
                           }
                       },
                       div { class: "flex items-center justify-between gap-3 ",
-                        div { class: "flex-shrink-0 w-10 h-10 rounded-box flex items-center justify-center bg-base-100 overflow-hidden bg-blend-multiply relative",
+                        div { class: "flex-shrink-0 w-8 h-8 rounded-box flex items-center justify-center bg-base-100 overflow-hidden relative",
                           if let Some(icon) = &pack.icon {
                             if !icon.is_empty() {
                               img {
-                                class: "w-full h-full object-cover",
+                                class: "w-full h-full object-cover bg-blend-multiply",
                                 src: "{icon}",
                               }
                             } else {
@@ -324,7 +313,8 @@ fn SoundpackDropdown(soundpack_type: SelectorType) -> Element {
                           } else {
                             Music { class: "w-4 h-4 text-base-content/50 bg-base-100" }
                           }
-                          if pack.id == current() {
+                          if pack.folder_path == current() {
+                            // Use folder_path for comparison
                             div { class: "absolute inset-0 bg-base-300/70 flex items-center justify-center ",
                               Check { class: "text-white w-6 h-6" }
                             }
@@ -337,6 +327,8 @@ fn SoundpackDropdown(soundpack_type: SelectorType) -> Element {
                           div { class: "text-xs font-normal line-clamp-1 text-base-content/50",
                             if let Some(author) = &pack.author {
                               "by {author}"
+                            } else {
+                              "by N/A"
                             }
                           }
                         }
@@ -348,9 +340,8 @@ fn SoundpackDropdown(soundpack_type: SelectorType) -> Element {
             }
           }
         }
-
         // Click outside to close
-        if is_open() {
+        if is_open() && has_soundpacks() {
           div {
             class: "fixed inset-0 z-40",
             onclick: move |_| {
@@ -373,25 +364,25 @@ fn SoundpackDropdown(soundpack_type: SelectorType) -> Element {
 #[component]
 pub fn KeyboardSoundpackSelector() -> Element {
     rsx! {
-      SoundpackSelector {
-        soundpack_type: SelectorType::Keyboard,
-        label: "Keyboard".to_string(),
-        icon: rsx! {
-          Keyboard { class: "w-4 h-4" }
-        },
-      }
+        SoundpackSelector {
+            soundpack_type: SelectorType::Keyboard,
+            label: "Keyboard".to_string(),
+            icon: rsx! {
+                Keyboard { class: "w-4 h-4" }
+            },
+        }
     }
 }
 
 #[component]
 pub fn MouseSoundpackSelector() -> Element {
     rsx! {
-      SoundpackSelector {
-        soundpack_type: SelectorType::Mouse,
-        label: "Mouse".to_string(),
-        icon: rsx! {
-          Mouse { class: "w-4 h-4" }
-        },
-      }
+        SoundpackSelector {
+            soundpack_type: SelectorType::Mouse,
+            label: "Mouse".to_string(),
+            icon: rsx! {
+                Mouse { class: "w-4 h-4" }
+            },
+        }
     }
 }

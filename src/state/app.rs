@@ -85,33 +85,52 @@ pub fn use_state_trigger() -> Callback<()> {
 
 // Reload the current soundpacks from configuration
 pub fn reload_current_soundpacks(audio_ctx: &crate::libs::audio::AudioContext) {
-    let config = crate::state::config::AppConfig::load();
-
-    // Load keyboard soundpack
-    match crate::libs::audio::load_keyboard_soundpack(audio_ctx, &config.keyboard_soundpack) {
+    let mut config = crate::state::config::AppConfig::load();
+    let mut config_changed = false; // Load keyboard soundpack
+    match
+        crate::libs::audio::soundpack_loader::load_keyboard_soundpack_with_cache_control(
+            audio_ctx,
+            &config.keyboard_soundpack,
+            false
+        )
+    {
         Ok(_) =>
             debug_print!(
                 "✅ Keyboard soundpack '{}' reloaded successfully",
                 config.keyboard_soundpack
             ),
-        Err(e) =>
+        Err(e) => {
             always_eprint!(
-                "❌ Failed to reload keyboard soundpack '{}': {}",
+                "❌ Failed to reload keyboard soundpack '{}': {}. Clearing selection.",
                 config.keyboard_soundpack,
                 e
-            ),
-    }
-
-    // Load mouse soundpack
-    match crate::libs::audio::load_mouse_soundpack(audio_ctx, &config.mouse_soundpack) {
+            );
+            config.keyboard_soundpack = "".to_string();
+            config_changed = true;
+        }
+    } // Load mouse soundpack
+    match
+        crate::libs::audio::soundpack_loader::load_mouse_soundpack_with_cache_control(
+            audio_ctx,
+            &config.mouse_soundpack,
+            false
+        )
+    {
         Ok(_) =>
             debug_print!("✅ Mouse soundpack '{}' reloaded successfully", config.mouse_soundpack),
-        Err(e) =>
+        Err(e) => {
             always_eprint!(
-                "❌ Failed to reload mouse soundpack '{}': {}",
+                "❌ Failed to reload mouse soundpack '{}': {}. Clearing selection.",
                 config.mouse_soundpack,
                 e
-            ),
+            );
+            config.mouse_soundpack = "".to_string();
+            config_changed = true;
+        }
+    } // Save config if any changes were made
+    if config_changed {
+        let _ = config.save();
+        debug_print!("💾 Config updated due to failed soundpack loads");
     }
 }
 
@@ -121,4 +140,65 @@ pub fn init_app_state() {
         println!("📝 Initializing global app state (mutex)...");
         let _ = GLOBAL_APP_STATE.set(Mutex::new(AppState::new()));
     }
+}
+
+// Global update state
+static GLOBAL_UPDATE_STATE: OnceCell<Mutex<Option<crate::utils::auto_updater::UpdateInfo>>> =
+    OnceCell::new();
+
+// Hook to get update info
+pub fn use_update_info() -> Option<crate::utils::auto_updater::UpdateInfo> {
+    let update_signal: Signal<u32> = use_context();
+    // Trigger signal check
+    let _ = update_signal();
+
+    if let Some(global_update) = GLOBAL_UPDATE_STATE.get() {
+        if let Ok(state) = global_update.lock() {
+            return state.clone();
+        }
+    }
+    None
+}
+
+// Function to set update info
+pub fn set_update_info(update_info: Option<crate::utils::auto_updater::UpdateInfo>) {
+    if let Some(global_update) = GLOBAL_UPDATE_STATE.get() {
+        if let Ok(mut state) = global_update.lock() {
+            *state = update_info;
+        }
+    }
+    // Note: We need a way to trigger UI updates when this is called
+    // This should be called from within Dioxus components that have access to the update signal
+}
+
+// Initialize update state - call this once at startup
+pub fn init_update_state() {
+    if GLOBAL_UPDATE_STATE.get().is_none() {
+        println!("📝 Initializing global update state...");
+        let _ = GLOBAL_UPDATE_STATE.set(Mutex::new(None));
+
+        // Load saved update info from config if available
+        if let Some(saved_update) = crate::utils::auto_updater::get_saved_update_info() {
+            println!(
+                "📦 Found saved update info: {} -> {}",
+                saved_update.current_version,
+                saved_update.latest_version
+            );
+            set_update_info(Some(saved_update));
+        }
+    }
+}
+
+// Hook to trigger update info changes (should be called from components)
+pub fn use_update_info_setter() -> Callback<Option<crate::utils::auto_updater::UpdateInfo>> {
+    let mut update_signal: Signal<u32> = use_context();
+    use_callback(move |info: Option<crate::utils::auto_updater::UpdateInfo>| {
+        set_update_info(info);
+        // Trigger UI update
+        let current_value = {
+            let val = update_signal.read();
+            *val
+        };
+        update_signal.set(current_value + 1);
+    })
 }

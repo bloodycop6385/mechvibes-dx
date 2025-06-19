@@ -8,12 +8,30 @@
 node_modules
 
 # cache
-/data
-
-/wix
-create_portable.ps1
-/bundles
+/data/*
+/bundle
 /tests*
+/dist
 
 # Test files and directories
-/soundpacks/custom*
+
+# Soundpacks - ignore new ones but keep existing tracked ones
+/soundpacks/keyboard/*
+!/soundpacks/keyboard/cherrymx-black-abs/
+!/soundpacks/keyboard/cherrymx-black-pbt/
+!/soundpacks/keyboard/cherrymx-blue-abs/
+!/soundpacks/keyboard/cherrymx-blue-pbt/
+!/soundpacks/keyboard/cherrymx-brown-abs/
+!/soundpacks/keyboard/cherrymx-brown-pbt/
+!/soundpacks/keyboard/cherrymx-red-abs/
+!/soundpacks/keyboard/cherrymx-red-pbt/
+!/soundpacks/keyboard/eg-crystal-purple/
+!/soundpacks/keyboard/eg-oreo/
+!/soundpacks/keyboard/topre-purple-hybrid-pbt/
+
+/soundpacks/mouse/*
+# Add mouse soundpack exceptions here when needed
+!/soundpacks/mouse/chat/
+!/soundpacks/mouse/ping/
+!/soundpacks/mouse/vibrate/
+!/soundpacks/mouse/wooden/

@@ -4,7 +4,7 @@ use crate::{
     utils::delay,
     utils::soundpack_installer::{
         check_soundpack_id_conflict,
-        extract_and_install_soundpack,
+        extract_and_install_soundpack_with_type,
         get_soundpack_id_from_zip,
     },
     utils::soundpack_validator::{ validate_soundpack_structure, validate_zip_file },
@@ -17,10 +17,11 @@ use std::sync::Arc;
 pub fn SoundpackImportModal(
     modal_id: String,
     audio_ctx: Arc<crate::libs::audio::AudioContext>,
+    target_soundpack_type: Option<crate::state::soundpack::SoundpackType>,
     on_import_success: EventHandler<()>
 ) -> Element {
     // Loading
-    let mut is_loading = use_signal(|| false);
+    let is_loading = use_signal(|| false);
 
     // Import step tracking
     let current_step = use_signal(|| ImportStep::Idle);
@@ -67,26 +68,33 @@ pub fn SoundpackImportModal(
         move |_| {
             reset_modal.call(());
         }
-    };
-
-    // File import handler
+    }; // File import handler
     let handle_import_click = {
         let audio_ctx = audio_ctx.clone();
         let app_state = app_state.clone();
         let state_trigger = state_trigger.clone();
         let reset_modal = reset_modal.clone();
+        let target_soundpack_type = target_soundpack_type.clone(); // Clone for closure
+        let error_step = error_step.clone();
+        let error_message = error_message.clone();
+        let success_step = success_step.clone();
+        let success_message = success_message.clone();
+        let current_step = current_step.clone();
+        let file_selected_message = file_selected_message.clone();
+        let is_loading = is_loading.clone();
         move |_| {
+            let audio_ctx = audio_ctx.clone();
+            let app_state = app_state.clone();
+            let on_import_success = on_import_success.clone();
+            let state_trigger = state_trigger.clone();
+            let reset_modal = reset_modal.clone();
             let mut error_step = error_step.clone();
             let mut error_message = error_message.clone();
             let mut success_step = success_step.clone();
             let mut success_message = success_message.clone();
             let mut current_step = current_step.clone();
             let mut file_selected_message = file_selected_message.clone();
-            let audio_ctx = audio_ctx.clone();
-            let app_state = app_state.clone();
-            let on_import_success = on_import_success.clone();
-            let state_trigger = state_trigger.clone();
-            let reset_modal = reset_modal.clone();
+            let mut is_loading = is_loading.clone();
 
             spawn(async move {
                 // Reset modal state before starting import
@@ -187,7 +195,9 @@ pub fn SoundpackImportModal(
 
                 println!("⚒️ Installing soundpack ...");
 
-                let soundpack_info = match extract_and_install_soundpack(&file_path) {
+                let soundpack_info = match
+                    extract_and_install_soundpack_with_type(&file_path, target_soundpack_type)
+                {
                     Ok(info) => info,
                     Err(e) => {
                         error_step.set(ImportStep::Installing);
@@ -238,8 +248,8 @@ pub fn SoundpackImportModal(
               "✕"
             }
           }
-          h3 { class: "font-bold text-lg mb-4", "Import soundpack" }
-
+          h3 { class: "font-bold text-lg mb-2", "Import soundpack" }
+          
           if *current_step.read() == ImportStep::Idle {
             div { class: "card border border-base-300 bg-base-200 text-sm p-4 space-y-4",
               div {

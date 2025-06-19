@@ -2,20 +2,24 @@ use crate::state::{ app::use_app_state };
 use dioxus::prelude::*;
 use lucide_dioxus::{ ExternalLink, FolderOpen, RefreshCcw };
 use std::sync::Arc;
-use crate::utils;
 
 #[component]
 pub fn SoundpackManager(on_import_click: EventHandler<MouseEvent>) -> Element {
     let app_state = use_app_state();
     let audio_ctx: Arc<crate::libs::audio::AudioContext> = use_context();
-    let state_trigger = crate::state::app::use_state_trigger();
-    // UI state for notification and loading
+    let state_trigger = crate::state::app::use_state_trigger(); // UI state for notification and loading
     let refreshing_soundpacks = use_signal(|| false);
     let refresh_soundpacks_cache = {
         let audio_ctx_refresh = audio_ctx.clone();
         let mut refreshing_soundpacks = refreshing_soundpacks.clone();
         let state_trigger_clone = state_trigger.clone();
         Callback::new(move |_| {
+            // Prevent multiple concurrent refreshes
+            if refreshing_soundpacks() {
+                println!("🔄 Refresh already in progress, skipping...");
+                return;
+            }
+
             println!("🔄 Refresh button clicked!");
             // Set loading state to true
             refreshing_soundpacks.set(true);
@@ -34,6 +38,7 @@ pub fn SoundpackManager(on_import_click: EventHandler<MouseEvent>) -> Element {
                 println!("🔄 Starting soundpack refresh operation...");
 
                 // Use the state trigger to refresh cache and update UI
+                // This will automatically update the count as well
                 println!("🔄 Calling state trigger...");
                 trigger.call(());
                 println!("🔄 State trigger called successfully");
@@ -43,31 +48,40 @@ pub fn SoundpackManager(on_import_click: EventHandler<MouseEvent>) -> Element {
                 crate::state::app::reload_current_soundpacks(&audio_ctx_clone);
 
                 // Add another small delay before changing the loading state back
-                Delay::new(Duration::from_millis(100)).await; // Reset loading state
+                Delay::new(Duration::from_millis(100)).await;
+                // Reset loading state
                 refreshing_signal.set(false);
-
                 println!("✅ Soundpack refresh complete");
             });
         })
     };
 
-    // Count soundpacks
-    let (soundpack_count_keyboard, soundpack_count_mouse) = utils::path::count_soundpacks_by_type();
-    let soundpacks_dir_absolute = utils::path::get_soundpacks_dir_absolute();
+    // Get soundpacks directory path
+    let soundpacks_dir_absolute = crate::utils::path::get_soundpacks_dir_absolute();
+
+    // Get current counts from cache
+    let soundpack_count_keyboard = app_state.optimized_cache.count.keyboard;
+    let soundpack_count_mouse = app_state.optimized_cache.count.mouse;
 
     rsx! {
       div { class: "space-y-4",
         div { class: "text-base-content",
           div {
             div { class: "font-medium text-sm pb-1",
-              "Found {soundpack_count_keyboard + soundpack_count_mouse} soundpack(s)"
-            }
-            ul { class: "list-disc pl-6",
-              li { class: "text-sm text-base-content/70",
-                "Keyboard: {soundpack_count_keyboard}"
+              if soundpack_count_keyboard + soundpack_count_mouse == 0 {
+                "Click refresh to scan for soundpacks"
+              } else {
+                "Found {soundpack_count_keyboard + soundpack_count_mouse} soundpack(s)"
               }
-              li { class: "text-sm text-base-content/70",
-                "Mouse: {soundpack_count_mouse}"
+            }
+            if soundpack_count_keyboard + soundpack_count_mouse > 0 {
+              ul { class: "list-disc pl-6",
+                li { class: "text-sm text-base-content/70",
+                  "Keyboard: {soundpack_count_keyboard}"
+                }
+                li { class: "text-sm text-base-content/70",
+                  "Mouse: {soundpack_count_mouse}"
+                }
               }
             }
           }
@@ -88,28 +102,10 @@ pub fn SoundpackManager(on_import_click: EventHandler<MouseEvent>) -> Element {
                 RefreshCcw { class: "w-4 h-4 mr-1" }
                 "Refresh"
               }
-            }
-            // Last scan info
+            } // Last scan info
             if app_state.optimized_cache.last_scan > 0 {
               div { class: "text-xs text-base-content/60",
-                "Last scan "
-                {
-                    let last_scan = app_state.optimized_cache.last_scan;
-                    let now = std::time::SystemTime::now()
-                        .duration_since(std::time::SystemTime::UNIX_EPOCH)
-                        .unwrap_or_default()
-                        .as_secs();
-                    let diff = now.saturating_sub(last_scan);
-                    if diff < 60 {
-                        ": just now".to_string()
-                    } else if diff < 3600 {
-                        format!("{} min ago", diff / 60)
-                    } else if diff < 86400 {
-                        format!("{} hr ago", diff / 3600)
-                    } else {
-                        format!("{} days ago", diff / 86400)
-                    }
-                }
+                "Last scan: {crate::utils::time::format_relative_time(app_state.optimized_cache.last_scan)}"
               }
             }
           }
@@ -128,7 +124,7 @@ pub fn SoundpackManager(on_import_click: EventHandler<MouseEvent>) -> Element {
           button {
             class: "btn btn-soft btn-sm",
             onclick: move |_| {
-                let _ = utils::path::open_path(&soundpacks_dir_absolute.clone());
+                let _ = crate::utils::path::open_path(&soundpacks_dir_absolute.clone());
             },
             FolderOpen { class: "w-4 h-4 mr-1" }
             "Open"

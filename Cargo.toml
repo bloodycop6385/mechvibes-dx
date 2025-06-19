@@ -1,17 +1,8 @@
 [package]
 name = "mechvibes-dx"
-version = "0.1.0"
+version = "0.3.0"
 authors = ["Hải Nguyễn <hainguyen.ts13@gmail.com>"]
-edition = "2021"
-
-[lib]
-name = "mechvibes_dx"
-path = "src/lib.rs"
-
-# Service binary for privileged operations
-[[bin]]
-name = "mechvibes-dx-service"
-path = "src/bin/service.rs"
+edition = "2024"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -24,22 +15,30 @@ dioxus = { version = "0.6.1", features = ["router"] }
 uuid = { version = "1", features = ["v4"] }
 env_logger = "0.11.6"
 futures-timer = "3.0.3"
-lucide-dioxus = { version = "2.1.0", features = ["all-icons"] }
-notify-rust = "4.11.3"
+lucide-dioxus = { version = "2.3.0", features = ["all-icons"] }
 once_cell = "1.21.3"
 open = "5.3.0"
 rand = "0.9.0"
 rdev = "0.5.3"
 rfd = "0.15"
 rodio = "0.20.1"
+cpal = "0.15"
 hound = "3.5"
-symphonia = { version = "0.5", features = ["mp3", "wav", "ogg"] }
+symphonia = { version = "0.5", features = [
+  "mp3",
+  "wav",
+  "ogg",
+  "isomp4",
+  "aac",
+] }
 image = "0.24"
 serde = "1.0.218"
 serde_json = "1.0.140"
 strum = { version = "0.26", features = ["derive"] }
-tokio = { version = "1.0", features = ["full"] }
 tray-icon = "0.14"
+tokio = { version = "1.0", features = ["full"] }
+reqwest = { version = "0.12", features = ["json"] }
+semver = "1.0"
 
 [target.'cfg(windows)'.dependencies]
 winreg = "0.52"
@@ -47,10 +46,12 @@ zip = "2.2.0"
 winapi = { version = "0.3", features = [
   "wincon",
   "winuser",
-  "processthreadsapi",
-  "securitybaseapi",
-  "winnt",
-  "handleapi",
+  "hidusage",
+  "hidpi",
+  "setupapi",
+  "devguid",
+  "cfgmgr32",
+  "winreg",
 ] }
 
 
@@ -62,16 +63,9 @@ serde_json = "1.0.140"
 winresource = "0.1"
 
 [features]
-default = ["dioxus/desktop"]
+default = ["dioxus/desktop", "auto-update"]
 desktop = ["dioxus/desktop"]
-
-[package.metadata.bundle]
-name = "MechvibesDX"
-identifier = "com.hainguyents13.mechvibesdx"
-version = "0.1.0"
-category = "Productivity"
-short_description = "MechvibesDX"
-long_description = ""
+auto-update = []
 
 [profile.wasm-dev]
 inherits = "dev"
