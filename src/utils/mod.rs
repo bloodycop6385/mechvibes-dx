@@ -1,4 +1,3 @@
-pub mod admin;
 pub mod auto_startup;
 pub mod auto_updater;
 pub mod config;
@@ -12,6 +11,6 @@ pub mod platform;
 pub mod soundpack;
 pub mod soundpack_installer;
 pub mod soundpack_validator;
-pub mod task_scheduler;
+pub mod spacing;
 pub mod theme;
 pub mod time;

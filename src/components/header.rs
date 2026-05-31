@@ -5,7 +5,7 @@ use dioxus::document::eval;
 use dioxus::prelude::*;
 
 const FAVICON: Asset = asset!("/assets/icon.ico");
-const GLOBAL_STYLES: Asset = asset!("/assets/style.css");
+const GLOBAL_STYLES_CSS: &str = include_str!("../../assets/style.css");
 
 // Font assets
 const LATO_REGULAR: Asset = asset!("/assets/fonts/Lato-Regular.ttf");
@@ -24,6 +24,7 @@ pub fn Header() -> Element {
 
     // Use effect to inject fonts and dynamic CSS
     use_effect(move || {
+        println!("🎨 Header: Injecting fonts and dynamic CSS");
         let custom_css = config().custom_css.clone();
 
         // Create font-face declarations using Manganis assets
@@ -105,9 +106,12 @@ pub fn Header() -> Element {
 
         eval(&script);
     });
+
     rsx! {
       // prettier-ignore
       document::Link { rel: "icon", r#type: "image/x-icon", href: FAVICON }
-      document::Link { rel: "stylesheet", href: GLOBAL_STYLES }
+
+      // Inline global styles since asset!() for CSS doesn't work in desktop apps
+      style { dangerous_inner_html: GLOBAL_STYLES_CSS }
     }
 }

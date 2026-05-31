@@ -122,12 +122,13 @@ pub fn extract_and_install_soundpack(file_path: &str) -> Result<SoundpackInfo, S
     let soundpack_type = if is_mouse_soundpack { "mouse" } else { "keyboard" };
 
     // Determine installation directory using soundpack type and ID
-    let soundpacks_dir = path::get_soundpacks_dir_absolute();
-    let install_dir = Path::new(&soundpacks_dir).join(soundpack_type).join(&soundpack_id);
+    // Custom soundpacks go to system app data directory
+    let soundpacks_dir = crate::state::paths::soundpacks::get_custom_soundpacks_dir();
+    let install_dir = soundpacks_dir.join(soundpack_type).join(&soundpack_id);
 
     // Create installation directory
     path
-        ::ensure_directory_exists(&install_dir.to_string_lossy())
+        ::ensure_directory_exists(&install_dir)
         .map_err(|e| format!("Failed to create soundpack directory: {}", e))?;
 
     // Extract all files
@@ -162,7 +163,7 @@ pub fn extract_and_install_soundpack(file_path: &str) -> Result<SoundpackInfo, S
         // Create parent directories if needed
         if let Some(parent) = output_path.parent() {
             path
-                ::ensure_directory_exists(&parent.to_string_lossy())
+                ::ensure_directory_exists(parent)
                 .map_err(|e| format!("Failed to create directory: {}", e))?;
         }
 
@@ -273,12 +274,13 @@ pub fn extract_and_install_soundpack_with_type(
     };
 
     // Determine installation directory using soundpack type and ID
-    let soundpacks_dir = path::get_soundpacks_dir_absolute();
-    let install_dir = Path::new(&soundpacks_dir).join(soundpack_type).join(&soundpack_id);
+    // Custom soundpacks go to system app data directory
+    let soundpacks_dir = crate::state::paths::soundpacks::get_custom_soundpacks_dir();
+    let install_dir = soundpacks_dir.join(soundpack_type).join(&soundpack_id);
 
     // Create installation directory
     path
-        ::ensure_directory_exists(&install_dir.to_string_lossy())
+        ::ensure_directory_exists(&install_dir)
         .map_err(|e| format!("Failed to create soundpack directory: {}", e))?;
 
     // Extract all files
@@ -309,7 +311,7 @@ pub fn extract_and_install_soundpack_with_type(
         // Create parent directory if needed
         if let Some(parent) = output_path.parent() {
             path
-                ::ensure_directory_exists(&parent.to_string_lossy())
+                ::ensure_directory_exists(parent)
                 .map_err(|e| format!("Failed to create parent directory: {}", e))?;
         }
 

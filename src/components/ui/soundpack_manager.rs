@@ -56,9 +56,6 @@ pub fn SoundpackManager(on_import_click: EventHandler<MouseEvent>) -> Element {
         })
     };
 
-    // Get soundpacks directory path
-    let soundpacks_dir_absolute = crate::utils::path::get_soundpacks_dir_absolute();
-
     // Get current counts from cache
     let soundpack_count_keyboard = app_state.optimized_cache.count.keyboard;
     let soundpack_count_mouse = app_state.optimized_cache.count.mouse;
@@ -69,9 +66,9 @@ pub fn SoundpackManager(on_import_click: EventHandler<MouseEvent>) -> Element {
           div {
             div { class: "font-medium text-sm pb-1",
               if soundpack_count_keyboard + soundpack_count_mouse == 0 {
-                "Click refresh to scan for soundpacks"
+                "Click refresh to scan for sound packs"
               } else {
-                "Found {soundpack_count_keyboard + soundpack_count_mouse} soundpack(s)"
+                "Found {soundpack_count_keyboard + soundpack_count_mouse} sound pack(s)"
               }
             }
             if soundpack_count_keyboard + soundpack_count_mouse > 0 {
@@ -88,7 +85,7 @@ pub fn SoundpackManager(on_import_click: EventHandler<MouseEvent>) -> Element {
         }
         div { class: "space-y-2",
           div { class: "text-base-content/70 text-sm",
-            "Refresh soundpack list to detect newly added or removed soundpacks."
+            "Refresh sound pack list to detect newly added or removed sound packs."
           }
           div { class: "flex items-center gap-4",
             button {
@@ -112,36 +109,74 @@ pub fn SoundpackManager(on_import_click: EventHandler<MouseEvent>) -> Element {
         }
         div { class: "divider" }
         div { class: "space-y-2",
-          div { class: "text-base-content font-medium text-sm", "Soundpack folder path" }
+          div { class: "text-base-content font-medium text-sm", "Built-in sound packs folder" }
           div { class: "text-sm text-base-content/70",
-            "This is the absolute path to the soundpack directory where Mechvibes looks for soundpacks."
+            "Default sound packs that ship with the app."
           }
-          input {
-            value: "{soundpacks_dir_absolute}",
-            class: "input input-sm w-full",
-            readonly: true,
+          div { class: "flex gap-2",
+            button {
+              class: "btn btn-soft btn-sm",
+              onclick: move |_| {
+                  let builtin_keyboard_dir = crate::state::paths::soundpacks::get_builtin_soundpacks_dir().join("keyboard");
+                  let _ = crate::utils::path::open_path(&builtin_keyboard_dir.to_string_lossy());
+              },
+              FolderOpen { class: "w-4 h-4 mr-1" }
+              "Keyboard"
+            }
+            button {
+              class: "btn btn-soft btn-sm",
+              onclick: move |_| {
+                  let builtin_mouse_dir = crate::state::paths::soundpacks::get_builtin_soundpacks_dir().join("mouse");
+                  let _ = crate::utils::path::open_path(&builtin_mouse_dir.to_string_lossy());
+              },
+              FolderOpen { class: "w-4 h-4 mr-1" }
+              "Mouse"
+            }
           }
-          button {
-            class: "btn btn-soft btn-sm",
-            onclick: move |_| {
-                let _ = crate::utils::path::open_path(&soundpacks_dir_absolute.clone());
-            },
-            FolderOpen { class: "w-4 h-4 mr-1" }
-            "Open"
+        }
+        div { class: "divider" }
+        div { class: "space-y-2",
+          div { class: "text-base-content font-medium text-sm", "Custom sound packs folder" }
+          div { class: "text-sm text-base-content/70",
+            "Add your own custom sound packs here."
+          }
+          div { class: "flex gap-2",
+            button {
+              class: "btn btn-soft btn-sm",
+              onclick: move |_| {
+                  let custom_keyboard_dir = crate::state::paths::soundpacks::get_custom_soundpacks_dir().join("keyboard");
+                  // Create the directory if it doesn't exist
+                  let _ = std::fs::create_dir_all(&custom_keyboard_dir);
+                  let _ = crate::utils::path::open_path(&custom_keyboard_dir.to_string_lossy());
+              },
+              FolderOpen { class: "w-4 h-4 mr-1" }
+              "Keyboard"
+            }
+            button {
+              class: "btn btn-soft btn-sm",
+              onclick: move |_| {
+                  let custom_mouse_dir = crate::state::paths::soundpacks::get_custom_soundpacks_dir().join("mouse");
+                  // Create the directory if it doesn't exist
+                  let _ = std::fs::create_dir_all(&custom_mouse_dir);
+                  let _ = crate::utils::path::open_path(&custom_mouse_dir.to_string_lossy());
+              },
+              FolderOpen { class: "w-4 h-4 mr-1" }
+              "Mouse"
+            }
           }
         }
         div { class: "divider" }
         div { class: "space-y-3",
-          div { class: "text-base-content font-medium text-sm", "Need more soundpacks?" }
+          div { class: "text-base-content font-medium text-sm", "Need more sound packs?" }
           div { class: "text-sm text-base-content/70",
-            "Check out the Mechvibes website to find more soundpacks. You can also create your own soundpacks using the Soundpack Editor."
+            "Check out the Mechvibes website to find more sound packs. You can also create your own sound packs using the Sound Pack Editor."
           }
           div { class: "flex items-center gap-2",
             a {
               class: "btn btn-soft btn-sm",
-              href: "https://mechvibes.com/soundpacks?utm_source=mechvibes&utm_medium=app&utm_campaign=soundpack_manager",
+              href: "https://mechvibes.com/sound-packs?utm_source=mechvibes&utm_medium=app&utm_campaign=soundpack_manager",
               target: "_blank",
-              "Browse soundpacks"
+              "Browse sound packs"
               ExternalLink { class: "w-4 h-4 ml-1" }
             }
             a {
